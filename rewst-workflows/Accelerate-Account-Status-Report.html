@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>New User Account Creation Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        h3 {
+            color: #0066cc;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 5px;
+        }
+        p {
+            margin: 8px 0;
+        }
+        .status {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-left: 4px solid #0066cc;
+            margin: 10px 0;
+        }
+        .success {
+            border-left-color: #28a745;
+        }
+        .error {
+            border-left-color: #dc3545;
+        }
+        .warning {
+            border-left-color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+<h3>Creating Student Accounts</h3>
+<p><strong>Student Name:</strong> {{ CTX.parsed_skyward.student.first_name }} {{ CTX.parsed_skyward.student.last_name }}</p>
+
+<div class="status">
+<p><strong>Student Accelerate Account Status:</strong><br>
+    {% set response_code = CTX.accelerate_create_student_results.student_exists_results.data.response.code %}
+    {% set users = CTX.accelerate_create_student_results.student_exists_results.data.response.users.user | default([]) %}
+
+    {% if response_code == "OK" %}
+        {% if users|length > 0 %}
+            {% set user = users[0] %}
+            {% if user.id and user.flags == 0 %}
+                Student Account already existed and is active
+            {% elif user.id and user.flags == 2 %}
+                Student Account already existed and was inactive. Made active and reset the password.
+            {% else %}
+                Error: Unexpected user flags value ({{ user.flags }})
+            {% endif %}
+        {% else %}
+            Student Account didn't exist, created Student Account
+        {% endif %}
+    {% else %}
+        Error: Response code was {{ response_code }}
+    {% endif %}
+</p>
+</div>
+
+<p><strong>Student Accelerate Account:</strong> {{ CTX.parsed_skyward.student.first_name }}.{{ CTX.parsed_skyward.student.last_name }}</p>
+<p><strong>Student Accelerate Account Password:</strong> UMOSWelcome1</p>
+<p><strong>Student Email Account Created:</strong> {{ CTX.parsed_skyward.student.first_name }}.{{ CTX.parsed_skyward.student.last_name }}@uplift-mi.org</p>
+
+<h3>Creating Guardian Account</h3>
+<p><strong>Guardian Name:</strong> {{ CTX.parsed_skyward.primary_guardian.first_name }} {{ CTX.parsed_skyward.primary_guardian.last_name }}</p>
+
+<div class="status">
+<p><strong>Guardian Accelerate Account Status:</strong><br>
+    {% set response_code = CTX.accelerate_create_guardian_results.guardian_exists_results.data.response.code %}
+    {% set users = CTX.accelerate_create_guardian_results.guardian_exists_results.data.response.users.user | default([]) %}
+
+    {% if response_code == "OK" %}
+        {% if users|length > 0 %}
+            {% set user = users[0] %}
+            {% if user.id and user.flags == 0 %}
+                Guardian Account already existed and is active
+            {% elif user.id and user.flags == 2 %}
+                Guardian Account already existed and was inactive. Made active and reset the password.
+            {% else %}
+                Error: Unexpected user flags value ({{ user.flags }})
+            {% endif %}
+        {% else %}
+            Guardian Account didn't exist, created Guardian Account
+        {% endif %}
+    {% else %}
+        Error: Response code was {{ response_code }}
+    {% endif %}
+</p>
+</div>
+
+<p><strong>Guardian Accelerate Account Username:</strong> {{ CTX.parsed_skyward.primary_guardian.first_name }}.{{ CTX.parsed_skyward.primary_guardian.last_name }}</p>
+<p><strong>Guardian Phone Number:</strong> {{ CTX.parsed_skyward.primary_guardian.phone_number }}</p>
+<p><strong>Guardian Mailing Address:</strong><br>
+{{ CTX.parsed_skyward.primary_guardian.mailing_address.street }}<br>
+{{ CTX.parsed_skyward.primary_guardian.mailing_address.city }}, {{ CTX.parsed_skyward.primary_guardian.mailing_address.state }} {{ CTX.parsed_skyward.primary_guardian.mailing_address.zip_code }}</p>
+</body>
+</html>

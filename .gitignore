@@ -1,0 +1,62 @@
+# PowerShell and Windows
+*.ps1_test
+*.log
+*.tmp
+~$*
+
+# Sensitive Information
+*password*
+*token*
+*secret*
+*credential*
+*.key
+*.pem
+config.json
+
+# Output Files (keep templates, ignore generated reports)
+*_output_*
+*_report_*.csv
+*_report_*.html
+*_audit_*.csv
+*_audit_*.html
+PermissionsAudit_*.csv
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Backup Files
+*.bak
+*.backup
+*.old
+
+# Test Files
+test_*.ps1
+*_test.ps1
+
+# API Keys and Credentials
+.env
+.env.local
+secrets.txt
+
+# Logs and Temporary Files
+logs/
+temp/
+*.log.*
+
+# Package Managers
+node_modules/
+packages/
+
+# Keep README files
+!README.md
+!*/README.md
+
+# Keep template files
+!*template*
+!*.jinja

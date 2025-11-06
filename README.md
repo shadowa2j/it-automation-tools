@@ -1,137 +1,102 @@
 # IT Automation Tools
 
-**Author:** Bryan Faulkner, with assistance from Claude  
-**Organization:** Uplift Michigan Online School & Managed Services Clients  
-**Last Updated:** 2025-11-06
+**Author:** Bryan Faulkner  
+**Repository:** https://github.com/ShadowA2J/it-automation-tools  
+**Last Updated:** November 6, 2025
 
----
-
-## 📋 Overview
-
-This repository contains PowerShell scripts and automation tools for IT support operations, including:
-- Network share permissions auditing
-- Rewst workflow integrations
-- File management utilities
-- Network administration tools
-- Student onboarding automation
-
-All scripts are production-ready, well-documented, and include proper versioning.
-
----
+A comprehensive collection of IT automation scripts, templates, and tools for system administration, workflow automation, and student information management.
 
 ## 📁 Repository Structure
 
 ```
 it-automation-tools/
-├── permissions/          # Permission auditing and management scripts
-├── rewst-workflows/      # Rewst automation workflow tools
-├── file-management/      # File and folder management utilities
-├── network-tools/        # Network administration scripts
-└── README.md            # This file
+├── permissions/                  # Network share permission auditing
+├── file-management/             # File and folder management utilities
+├── network-tools/               # Network administration scripts
+├── powershell-utilities/        # General PowerShell utilities
+├── rewst-workflows/             # Rewst workflow automation templates
+├── email-templates/             # HTML email templates
+└── documentation/               # Technical documentation and guides
 ```
 
----
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
-- PowerShell 5.1 or higher
-- Appropriate permissions for target systems
-- Network access to target shares/systems
+- PowerShell 5.1 or higher for Windows scripts
+- Appropriate administrative permissions for target systems
+- Rewst platform access for workflow templates
 
 ### Installation
-1. Clone this repository:
-   ```powershell
-   git clone https://github.com/ShadowA2J/it-automation-tools.git
-   cd it-automation-tools
-   ```
+```bash
+git clone https://github.com/ShadowA2J/it-automation-tools.git
+cd it-automation-tools
+```
 
-2. Review script documentation before running
-3. Test scripts in a non-production environment first
-
----
-
-## 📚 Script Categories
+## 📋 Script Categories
 
 ### Permissions Management
-Tools for auditing and managing NTFS permissions across network shares.
-- Comprehensive permission audits
-- Unusual permission detection
-- Inheritance tracking
-
-### Rewst Workflows
-Integration tools for Rewst automation platform.
-- Student onboarding workflows
-- HaloPSA integrations
-- Skyward API connections
+- **Get-FolderPermissionsAudit.ps1** - Comprehensive network share permissions audit with HTML/CSV reporting
 
 ### File Management
-Utilities for file and folder operations.
-- Bulk operations
-- Directory restructuring
-- Monitoring and reporting
+- **Move-FilesWithFuzzyMatching.ps1** - Intelligent file reorganization with fuzzy matching
+- **Get-NCRFolderInventory.ps1** - Detailed folder inventory and analysis
 
 ### Network Tools
-Network administration and monitoring scripts.
-- Endpoint management
-- Remote desktop utilities
-- System configuration
+- **Remove-ZebraPrintDrivers.ps1** - Zebra printer driver removal utility
 
----
+### PowerShell Utilities
+- **Invoke-RDUserLogoff-Multi.ps1** - Remote Desktop session management across multiple servers
 
-## 🔒 Security Notes
+### Rewst Workflows
+- **Student-Guardian-Data-Parser.jinja** - Skyward API data parsing template
+- **Accelerate-Account-Status-Report.html** - Account creation status reporting
 
-- **Never commit credentials** - use .gitignore for sensitive files
-- **Test thoroughly** - always test in non-production first
-- **Review permissions** - ensure scripts run with appropriate privileges
-- **Audit logs** - review script outputs for security concerns
+### Email Templates
+- **UMOS-Welcome-Email.html** - Student onboarding welcome email
+- **UMOS-Chromebook-Shipping.html** - Chromebook shipping notification
 
----
+### Documentation
+- **Barcode-Troubleshooting-Guide.md** - Crystal Reports barcode troubleshooting
 
-## 📝 Version Control
+## 🔧 Usage
 
-All scripts follow semantic versioning (MAJOR.MINOR.PATCH):
-- **MAJOR**: Breaking changes or significant functionality overhaul
-- **MINOR**: New features added in backward-compatible manner
-- **PATCH**: Backward-compatible bug fixes
+Each script includes comprehensive inline documentation. View help for any PowerShell script:
 
-Each script includes:
-- Version number in header
-- Author attribution
-- Date created/modified
-- Detailed change log
-- Usage examples
-
----
+```powershell
+Get-Help .\ScriptName.ps1 -Full
+```
 
 ## 🤝 Contributing
 
-This is a personal repository for professional use. Scripts are created and maintained by Bryan Faulkner with assistance from Claude AI.
+This is a personal repository for my IT automation work. Feel free to fork and adapt for your own use.
 
----
+## 📝 Versioning
+
+All scripts follow semantic versioning (MAJOR.MINOR.PATCH):
+- MAJOR: Breaking changes
+- MINOR: New features, backward compatible
+- PATCH: Bug fixes, backward compatible
+
+## 📧 Contact
+
+For questions or support regarding these scripts:
+- Create an issue in this repository
+- Email: support@qcsph.com (for Uplift Michigan related items)
 
 ## 📄 License
 
-These scripts are for internal use within Uplift Michigan Online School and managed services client environments.
+These scripts are provided as-is for personal and professional use.
+
+## 🎯 Environments
+
+These scripts are used across multiple client environments:
+- **Uplift Michigan Online School** - Student information and onboarding automation
+- **Wilbert Plastics** - Network administration and file management
+- **Prism Plastics** - System maintenance and printer management
+- **Marmon Plastics** - Network infrastructure support
 
 ---
 
-## 📞 Support
-
-For issues or questions:
-- Review script documentation
-- Check error messages in console output
-- Verify prerequisites and permissions
-- Test in isolated environment
-
----
-
-## ⚠️ Disclaimer
-
-All scripts are provided as-is. Always test in a non-production environment before deploying to production systems. Ensure you have proper backups before running any automation scripts.
-
----
-
-**Last Repository Update:** 2025-11-06  
-**Total Scripts:** Starting collection  
-**PowerShell Version:** 5.1+
+**Version:** 2.0.0  
+**Last Update:** November 6, 2025  
+**Status:** Active Development
