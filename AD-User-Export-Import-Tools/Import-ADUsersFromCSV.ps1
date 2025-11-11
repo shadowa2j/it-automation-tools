@@ -233,7 +233,7 @@ foreach ($CsvUser in $CsvData) {
             
             if ($AdValueString -ne $CsvValueString) {
                 # Handle special types
-                if ($Property -like "*Date*" -or $Property -eq "accountExpires") {
+                if (($Property -like "*Date*" -and $Property -notin $ExcludedAttributes) -or $Property -eq "accountExpires") {
                     try {
                         $Changes[$Property] = [DateTime]::Parse($CsvValueString)
                         $ChangeCount++
