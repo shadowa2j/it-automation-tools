@@ -11,7 +11,7 @@
     File Name      : Get-TopLevelFolderReport.ps1
     Author         : Bryan Jackson
     Prerequisite   : PowerShell 5.1 or higher
-    Version        : 1.0.0
+    Version        : 1.1.0
     Date           : 2025-11-13
 
 .EXAMPLE
@@ -49,8 +49,8 @@ function Write-Log {
     }
 }
 
-# Function to get the newest date recursively
-function Get-NewestDateRecursive {
+# Function to get the newest date and total size recursively
+function Get-FolderStatistics {
     param(
         [Parameter(Mandatory=$true)]
         [string]$Path,
@@ -60,19 +60,25 @@ function Get-NewestDateRecursive {
     )
     
     $NewestDate = $null
+    $TotalSize = 0
     
     try {
         # Get the folder's own LastWriteTime
         $FolderInfo = Get-Item -Path $Path -ErrorAction Stop
         $NewestDate = $FolderInfo.LastWriteTime
         
-        # Get all child items (files and folders)
-        $ChildItems = Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue | 
-            Where-Object { $_.LastWriteTime -gt $NewestDate }
+        # Get all child items (files and folders) recursively
+        $ChildItems = Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
         
+        # Compare each item's LastWriteTime to find the newest and calculate total size
         foreach ($Item in $ChildItems) {
             if ($Item.LastWriteTime -gt $NewestDate) {
                 $NewestDate = $Item.LastWriteTime
+            }
+            
+            # Only add size for files, not directories
+            if (-not $Item.PSIsContainer) {
+                $TotalSize += $Item.Length
             }
         }
     }
@@ -89,7 +95,10 @@ function Get-NewestDateRecursive {
         }
     }
     
-    return $NewestDate
+    return @{
+        NewestDate = $NewestDate
+        TotalSize = $TotalSize
+    }
 }
 
 # Main script execution
@@ -133,22 +142,29 @@ try {
         
         Write-Log -Message "[$CurrentFolder/$($TopLevelFolders.Count)] Processing folder: $($Folder.Name)" -Level 'INFO'
         
-        # Get newest date recursively
+        # Get folder statistics (newest date and total size)
         $ErrorCountRef = [ref]$ErrorCount
-        $NewestDate = Get-NewestDateRecursive -Path $Folder.FullName -ErrorCount $ErrorCountRef
+        $FolderStats = Get-FolderStatistics -Path $Folder.FullName -ErrorCount $ErrorCountRef
+        
+        # Convert size to human-readable format
+        $SizeInGB = [math]::Round($FolderStats.TotalSize / 1GB, 2)
+        $SizeInMB = [math]::Round($FolderStats.TotalSize / 1MB, 2)
+        $SizeDisplay = if ($SizeInGB -ge 1) { "$SizeInGB GB" } else { "$SizeInMB MB" }
         
         # Create result object
         $Result = [PSCustomObject]@{
             FolderName = $Folder.Name
             FolderPath = $Folder.FullName
-            NewestModifiedDate = if ($NewestDate) { $NewestDate } else { "Unable to determine" }
+            NewestModifiedDate = if ($FolderStats.NewestDate) { $FolderStats.NewestDate } else { "Unable to determine" }
+            FolderSizeBytes = $FolderStats.TotalSize
+            FolderSizeDisplay = $SizeDisplay
             FolderCreatedDate = $Folder.CreationTime
             FolderLastModified = $Folder.LastWriteTime
         }
         
         $Results += $Result
         
-        Write-Log -Message "  Newest date found: $($Result.NewestModifiedDate)" -Level 'INFO'
+        Write-Log -Message "  Newest date: $($Result.NewestModifiedDate) | Size: $($Result.FolderSizeDisplay)" -Level 'INFO'
     }
     
     Write-Progress -Activity "Scanning Top-Level Folders" -Completed
