@@ -322,6 +322,15 @@ The log file includes:
 
 ## Version History
 
+### Version 1.2.0 (2025-11-13)
+
+#### Get-TopLevelFolderReport.ps1
+- **Fixed**: Folder size calculation now properly handles access denied errors
+  - Changed from `-Recurse` with `-ErrorAction SilentlyContinue` to manual recursion
+  - Now logs access denied subfolders individually instead of silently skipping entire trees
+  - Significantly more accurate size calculations when some subfolders are inaccessible
+  - Better error tracking and reporting
+
 ### Version 1.1.0 (2025-11-13)
 
 #### Get-TopLevelFolderReport.ps1

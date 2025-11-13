@@ -11,7 +11,7 @@
     File Name      : Get-TopLevelFolderReport.ps1
     Author         : Bryan Jackson
     Prerequisite   : PowerShell 5.1 or higher
-    Version        : 1.1.0
+    Version        : 1.2.0
     Date           : 2025-11-13
 
 .EXAMPLE
@@ -67,18 +67,46 @@ function Get-FolderStatistics {
         $FolderInfo = Get-Item -Path $Path -ErrorAction Stop
         $NewestDate = $FolderInfo.LastWriteTime
         
-        # Get all child items (files and folders) recursively
-        $ChildItems = Get-ChildItem -Path $Path -Recurse -Force -ErrorAction SilentlyContinue
+        # Use a different approach - manually recurse to handle errors better
+        $ItemsToProcess = New-Object System.Collections.Queue
+        $ItemsToProcess.Enqueue($Path)
         
-        # Compare each item's LastWriteTime to find the newest and calculate total size
-        foreach ($Item in $ChildItems) {
-            if ($Item.LastWriteTime -gt $NewestDate) {
-                $NewestDate = $Item.LastWriteTime
-            }
+        while ($ItemsToProcess.Count -gt 0) {
+            $CurrentPath = $ItemsToProcess.Dequeue()
             
-            # Only add size for files, not directories
-            if (-not $Item.PSIsContainer) {
-                $TotalSize += $Item.Length
+            try {
+                # Get items in current directory
+                $Items = Get-ChildItem -Path $CurrentPath -Force -ErrorAction Stop
+                
+                foreach ($Item in $Items) {
+                    # Update newest date
+                    if ($Item.LastWriteTime -gt $NewestDate) {
+                        $NewestDate = $Item.LastWriteTime
+                    }
+                    
+                    if ($Item.PSIsContainer) {
+                        # Add directory to queue for processing
+                        $ItemsToProcess.Enqueue($Item.FullName)
+                    }
+                    else {
+                        # Add file size
+                        if ($null -ne $Item.Length) {
+                            $TotalSize += $Item.Length
+                        }
+                    }
+                }
+            }
+            catch [System.UnauthorizedAccessException] {
+                Write-Log -Message "  Access denied to subfolder: $CurrentPath" -Level 'WARNING'
+                if ($ErrorCount) {
+                    $ErrorCount.Value++
+                }
+            }
+            catch {
+                Write-Log -Message "  Error accessing subfolder $CurrentPath : $($_.Exception.Message)" -Level 'WARNING'
+                if ($ErrorCount) {
+                    $ErrorCount.Value++
+                }
             }
         }
     }
