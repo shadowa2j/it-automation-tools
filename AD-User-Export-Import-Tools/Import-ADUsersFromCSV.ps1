@@ -33,8 +33,8 @@
     File Name      : Import-ADUsersFromCSV.ps1
     Author         : BF and Claude
     Prerequisite   : ActiveDirectory PowerShell Module, Run as Administrator
-    Version        : 1.0
-    Date           : 2025-11-11
+    Version        : 1.3
+    Date           : 2025-11-12
     
 .NOTES
     IMPORTANT: Some attributes are read-only or system-managed and cannot be updated.
@@ -51,15 +51,18 @@ param (
     [string[]]$UpdateSpecificAttributes,
     
     [Parameter(Mandatory = $false)]
-    [switch]$SkipConfirmation,
-    
-    [Parameter(Mandatory = $false)]
-    [switch]$WhatIf
+    [switch]$SkipConfirmation
 )
 
 # Initialize logging
-$LogPath = "$env:USERPROFILE\Desktop\ADImport_Log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-$ErrorLogPath = "$env:USERPROFILE\Desktop\ADImport_Errors_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+$LogPath = "C:\temp\scripts\ADImport_Log_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+$ErrorLogPath = "C:\temp\scripts\ADImport_Errors_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+
+# Ensure log directory exists
+$LogDir = Split-Path -Path $LogPath -Parent
+if (-not (Test-Path $LogDir)) {
+    New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+}
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -77,7 +80,7 @@ function Write-Log {
 
 Write-Log "========== AD User Import Script Started =========="
 Write-Log "CSV Path: $CsvPath"
-Write-Log "WhatIf Mode: $($WhatIf.IsPresent)"
+Write-Log "WhatIf Mode: $($WhatIfPreference)"
 
 # Check if ActiveDirectory module is available
 try {
@@ -127,7 +130,7 @@ $SkippedCount = 0
 $ErrorRecords = @()
 
 # Confirm before proceeding (unless skipped or WhatIf)
-if (-not $SkipConfirmation -and -not $WhatIf) {
+if (-not $SkipConfirmation -and -not $WhatIfPreference) {
     Write-Host "`n========== CONFIRMATION REQUIRED ==========" -ForegroundColor Yellow
     Write-Host "You are about to update $CsvUserCount user account(s) in Active Directory" -ForegroundColor Yellow
     Write-Host "CSV File: $CsvPath" -ForegroundColor Cyan
@@ -210,6 +213,25 @@ foreach ($CsvUser in $CsvData) {
         $CsvValue = $CsvUser.$Property
         $AdValue = $AdUser.$Property
         
+        # Map display names to LDAP attribute names
+        $MappedProperty = switch ($Property) {
+            'Office' { 'physicalDeliveryOfficeName' }
+            'City' { 'l' }
+            'State' { 'st' }
+            'EmailAddress' { 'mail' }
+            default { $Property }
+        }
+        
+        # Skip attributes that aren't valid for Set-ADUser -Replace
+        if ($MappedProperty -in @('Country', 'countryCode')) {
+            continue
+        }
+        
+        # Get the AD value using the mapped property name
+        if ($MappedProperty -ne $Property) {
+            $AdValue = $AdUser.$MappedProperty
+        }
+        
         # Skip if CSV value is null or empty string
         if ([string]::IsNullOrWhiteSpace($CsvValue)) {
             continue
@@ -222,7 +244,7 @@ foreach ($CsvUser in $CsvData) {
             $CsvValueSorted = ($CsvValueArray | Sort-Object) -join ';'
             
             if ($AdValueSorted -ne $CsvValueSorted) {
-                $Changes[$Property] = $CsvValueArray
+                $Changes[$MappedProperty] = $CsvValueArray
                 $ChangeCount++
             }
         }
@@ -233,21 +255,21 @@ foreach ($CsvUser in $CsvData) {
             
             if ($AdValueString -ne $CsvValueString) {
                 # Handle special types
-                if (($Property -like "*Date*" -and $Property -notin $ExcludedAttributes) -or $Property -eq "accountExpires") {
+                if (($MappedProperty -like "*Date*" -and $MappedProperty -notin $ExcludedAttributes) -or $MappedProperty -eq "accountExpires") {
                     try {
-                        $Changes[$Property] = [DateTime]::Parse($CsvValueString)
+                        $Changes[$MappedProperty] = [DateTime]::Parse($CsvValueString)
                         $ChangeCount++
                     }
                     catch {
-                        Write-Log "  Unable to parse date for property '$Property': $CsvValueString" -Level "WARNING"
+                        Write-Log "  Unable to parse date for property '$MappedProperty': $CsvValueString" -Level "WARNING"
                     }
                 }
-                elseif ($Property -eq "Enabled" -or $Property -like "*Flag*") {
-                    $Changes[$Property] = [bool]::Parse($CsvValueString)
+                elseif ($MappedProperty -eq "Enabled" -or $MappedProperty -like "*Flag*") {
+                    $Changes[$MappedProperty] = [bool]::Parse($CsvValueString)
                     $ChangeCount++
                 }
                 else {
-                    $Changes[$Property] = $CsvValueString
+                    $Changes[$MappedProperty] = $CsvValueString
                     $ChangeCount++
                 }
             }
@@ -262,10 +284,7 @@ foreach ($CsvUser in $CsvData) {
             Write-Log "    - $($Change.Key): Updating to '$($Change.Value)'"
         }
         
-        if ($WhatIf) {
-            Write-Log "  [WHATIF] Would update user: $UserIdentity" -Level "WARNING"
-        }
-        else {
+        if ($PSCmdlet.ShouldProcess($UserIdentity, "Update AD user attributes")) {
             try {
                 Set-ADUser -Identity $AdUser.DistinguishedName -Replace $Changes -ErrorAction Stop
                 Write-Log "  Successfully updated user: $UserIdentity" -Level "SUCCESS"
@@ -280,6 +299,10 @@ foreach ($CsvUser in $CsvData) {
                     Error = $_.Exception.Message
                 }
             }
+        }
+        else {
+            Write-Log "  [WHATIF] Would update user: $UserIdentity" -Level "WARNING"
+            $UpdatedCount++
         }
     }
     else {
@@ -299,7 +322,7 @@ if ($ErrorRecords.Count -gt 0) {
 # Display summary
 Write-Host "`n========== Update Summary ==========" -ForegroundColor Cyan
 Write-Host "Total Records Processed: $CsvUserCount" -ForegroundColor White
-if ($WhatIf) {
+if ($WhatIfPreference) {
     Write-Host "Would Update: $UpdatedCount" -ForegroundColor Yellow
 } else {
     Write-Host "Successfully Updated: $UpdatedCount" -ForegroundColor Green
