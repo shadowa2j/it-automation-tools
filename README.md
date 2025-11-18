@@ -93,23 +93,9 @@ All scripts follow semantic versioning (MAJOR.MINOR.PATCH):
 - MINOR: New features, backward compatible
 - PATCH: Bug fixes, backward compatible
 
-## 📧 Contact
-
-For questions or support regarding these scripts:
-- Create an issue in this repository
-- Email: support@qcsph.com (for Uplift Michigan related items)
-
 ## 📄 License
 
 These scripts are provided as-is for personal and professional use.
-
-## 🎯 Environments
-
-These scripts are used across multiple client environments:
-- **Uplift Michigan Online School** - Student information and onboarding automation
-- **Wilbert Plastics** - Network administration and file management
-- **Prism Plastics** - System maintenance and printer management
-- **Marmon Plastics** - Network infrastructure support
 
 ---
 

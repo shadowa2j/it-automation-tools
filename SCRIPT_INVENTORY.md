@@ -19,34 +19,37 @@
 
 ## ✅ Scripts Currently in Repository
 
-### PowerShell Scripts
-
-#### Active Directory Management
+### Active Directory Management
+**Location:** `/AD_User_Export_Import_Tools/`
 - **Export-ADUsersFromOU.ps1** - Export AD users from specific OU to CSV
 - **Import-ADUsersFromCSV.ps1** - Bulk import AD users from CSV
 
-#### File Management
+### File & Network Share Management
+**Location:** `/file_management/`
 - **Get-NCRFolderInventory.ps1** - Scan and inventory NCR folders
 - **Move-FilesWithFuzzyMatching.ps1** - Intelligent file reorganization with fuzzy matching
-- **Get-TopLevelFolderReport.ps1** - Network share folder reporting
-- **Move-OldFoldersToArchive.ps1** - Archive old folders based on age
+- **Get-TopLevelFolderReport.ps1** v1.2.0 - Network share folder reporting with size analysis
+- **Move-OldFoldersToArchive.ps1** v1.0.0 - Archive old folders based on modification date
+- **Fix-Windows11-PDFPreview.ps1** - Fix Windows 11 PDF preview issues (in subfolder)
 
-#### Network Tools
+### Printer Management
+**Location:** `/printer_management/`
 - **Remove-ZebraPrintDrivers.ps1** - Comprehensive Zebra driver cleanup
 
-#### Permissions
-- **Get-FolderPermissionsAudit.ps1** - Network share permissions audit with CSV/HTML output
+### Permissions Management
+**Location:** `/permissions/`
+- **Get-FolderPermissionsAudit.ps1** v2.0.0 - Network share permissions audit with CSV/HTML output
 
-#### PowerShell Utilities
+### Terminal Services
+**Location:** `/terminal_services/`
 - **Invoke-RDUserLogoff-Multi.ps1** - Remote Desktop session management
 
-#### Office/M365
+### Office/M365
+**Location:** `/Office_M365/`
 - **Reset-OfficeAndTeams.ps1** - Reset Office and Teams installations
 
-#### Windows Management
-- **Fix-Windows11-PDFPreview.ps1** - Fix Windows 11 PDF preview issues
-
 ### Rewst Workflow Templates
+**Location:** `/rewst_workflows/`
 
 #### Uplift Michigan Online School
 - **Student-Guardian-Data-Parser.jinja** - Skyward API data parsing
@@ -59,12 +62,14 @@
 - Student ID Extraction from Emails
 
 ### Email Templates
+**Location:** `/email_templates/`
 
 #### Uplift Michigan Online School
 - **UMOS-Welcome-Email.html** - Student onboarding welcome
 - **UMOS-Chromebook-Shipping.html** - Chromebook shipping notification
 
 ### Documentation
+**Location:** `/documentation/`
 - **Barcode-Troubleshooting-Guide.md** - Crystal Reports barcode issue resolution
 - Various README files per category
 
@@ -78,12 +83,14 @@
 - **Move-SpecificFolders.ps1** - Move folders by exact name match
 - **Export-DirectoryListing.ps1** - Export directory listings
 
-#### Network & System Tools
+#### Printer Management
+- **Install-PrinterDriverFromSharePoint.ps1** - Download and install printer drivers from SharePoint
+- **Deploy-PrintersByGroup.ps1** - Printer deployment for Terminal Services
+
+#### System Administration
 - **Move-OffScreenWindows.ps1** - Reposition off-screen windows
 - **Install-Font.ps1** - Install fonts system-wide
-- **Install-PrinterDriverFromSharePoint.ps1** - Download and install printer drivers from SharePoint
 - **Monitor-FolderAndChangePermissions.ps1** - File change monitoring with ACL updates
-- **Deploy-PrintersByGroup.ps1** - Printer deployment for Terminal Services
 
 #### Documentation
 - System Maintenance Notification Template
@@ -92,15 +99,20 @@
 
 ---
 
-## 🏢 Environment Breakdown
+## 📂 Folder Structure
 
-| Client | Script Count | Primary Use Cases |
-|--------|--------------|-------------------|
-| Uplift Michigan | 4+ | Student onboarding, email automation |
-| Wilbert Plastics | 3+ | Terminal servers, file management |
-| Prism Plastics | 2+ | Printer management, barcode troubleshooting |
-| Marmon Plastics | 2+ | Network share management |
-| Multi-Client | 5+ | General IT utilities |
+```
+it-automation-tools/
+├── AD_User_Export_Import_Tools/  # Active Directory user management
+├── permissions/                   # Network share permission auditing
+├── file_management/               # File, folder, and network share management
+├── printer_management/            # Printer driver and deployment tools
+├── terminal_services/             # Remote Desktop and terminal server utilities
+├── Office_M365/                   # Office and Teams management
+├── rewst_workflows/               # Rewst workflow automation templates
+├── email_templates/               # HTML email templates
+└── documentation/                 # Technical documentation and guides
+```
 
 ---
 
@@ -124,22 +136,36 @@
 ## 🎯 Repository Goals
 
 ### Short Term (1-2 weeks)
-- Complete folder reorganization with underscores
-- Add all identified scripts from conversation history
-- Update all README documentation
-- Create usage examples for each script
+- [x] Complete folder reorganization with underscores
+- [x] Merge network share management into file management
+- [x] Rename folders for clarity (terminal_services, printer_management)
+- [ ] Add all identified scripts from conversation history
+- [ ] Update all README documentation
+- [ ] Create usage examples for each script
 
 ### Medium Term (1-3 months)
-- Create automated testing framework
-- Add script templates for new development
-- Build script dependency documentation
-- Create video tutorials
+- [ ] Create automated testing framework
+- [ ] Add script templates for new development
+- [ ] Build script dependency documentation
+- [ ] Create video tutorials
 
 ### Long Term (3+ months)
-- PowerShell module packaging
-- CI/CD pipeline for testing
-- Community contributions welcome
-- Integration with other automation platforms
+- [ ] PowerShell module packaging
+- [ ] CI/CD pipeline for testing
+- [ ] Community contributions welcome
+- [ ] Integration with other automation platforms
+
+---
+
+## 📋 Recent Changes
+
+### November 18, 2025
+- Merged `network_share_management` folder into `file_management`
+- Renamed `powershell_utilities` to `terminal_services`
+- Renamed `network_tools` to `printer_management`
+- Updated all documentation to reflect new structure
+- Consolidated duplicate inventory files
+- Standardized folder naming with underscores
 
 ---
 
@@ -147,9 +173,10 @@
 
 ### Immediate
 - [x] Consolidate inventory files
-- [ ] Rename all folders to use underscores
+- [x] Rename all folders to use underscores
+- [x] Merge network share management scripts
 - [ ] Add remaining scripts from conversation history
-- [ ] Update all README files
+- [ ] Update individual folder README files
 
 ### Future
 - [ ] Extract and version all unversioned scripts
@@ -159,6 +186,6 @@
 
 ---
 
-**Inventory Version:** 3.0  
+**Inventory Version:** 3.1  
 **Last Updated:** November 18, 2025  
 **Maintained By:** Bryan Faulkner
