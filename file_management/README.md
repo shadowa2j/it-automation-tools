@@ -1,18 +1,82 @@
-# File Management Utilities
+# File & Network Share Management
 
-**Category:** File System Operations & Automation  
+**Category:** File System Operations & Network Share Administration  
 **Author:** Bryan Faulkner, with assistance from Claude  
-**Last Updated:** 2025-11-06
+**Last Updated:** 2025-11-18
 
 ---
 
 ## 📋 Overview
 
-This folder contains PowerShell scripts for file and folder management operations across local systems, network shares, and SharePoint Online.
+This folder contains PowerShell scripts for file and folder management operations across local systems, network shares, and SharePoint Online. Includes tools for network share analysis, archiving, and folder restructuring.
+
+---
+
+## 📜 Scripts in This Folder
+
+### Network Share Management
+
+#### Get-TopLevelFolderReport.ps1
+**Version:** 1.2.0  
+**Purpose:** Recursively scans all folders and files under each top-level folder in a network share, identifies the newest `LastWriteTime`, and exports results to a timestamped CSV report.
+
+**Features:**
+- ✅ Recursive scanning of all files and folders
+- ✅ Newest date detection from both files AND folders
+- ✅ Folder size calculation (bytes, MB, GB)
+- ✅ Progress indicators with real-time updates
+- ✅ Comprehensive logging with error handling
+- ✅ Sorted output by modification date
+- ✅ CSV export for analysis
+
+#### Move-OldFoldersToArchive.ps1
+**Version:** 1.0.0  
+**Purpose:** Reads the CSV report from Get-TopLevelFolderReport.ps1, identifies folders with modification dates older than 2024, and safely moves them to an archive location.
+
+**Features:**
+- ✅ Interactive CSV selection with file picker
+- ✅ WhatIf mode for safe testing
+- ✅ Confirmation prompts before moving
+- ✅ Auto-create archive folder
+- ✅ Date filtering (configurable cutoff)
+- ✅ Conflict detection
+- ✅ Detailed logging and progress tracking
+
+### File Organization
+
+#### Move-FilesWithFuzzyMatching.ps1
+**Purpose:** Intelligent file reorganization with fuzzy part number matching for manufacturing environments.
+
+**Features:**
+- Fuzzy part number matching (ignores suffixes after second hyphen)
+- Dry-run mode for testing
+- Comprehensive logging
+- File size tracking
+- Identical file detection
+
+#### Get-NCRFolderInventory.ps1
+**Purpose:** Scan root\client\partnumber structure for NCR folders and export inventory.
+
+**Features:**
+- Recursive scanning
+- File count and size reporting
+- CSV export
+- Error handling for inaccessible folders
+
+### Windows Management
+
+#### Windows11-PDF-Preview-Fix/
+Complete solution for fixing Windows 11 PDF preview issues with deployment guides.
 
 ---
 
 ## 🎯 Common Use Cases
+
+### Network Share Administration
+- Storage cleanup planning and archiving
+- Identify stale data for compliance
+- Capacity planning and usage analysis
+- Data lifecycle management
 
 ### Directory Operations
 - Bulk folder creation and restructuring
@@ -21,7 +85,7 @@ This folder contains PowerShell scripts for file and folder management operation
 - Path length validation
 
 ### File Operations
-- Bulk file renaming
+- Bulk file renaming with fuzzy matching
 - File type conversions
 - Metadata management
 - Duplicate detection
@@ -32,65 +96,11 @@ This folder contains PowerShell scripts for file and folder management operation
 - File age analysis
 - Access tracking
 
-### SharePoint Integration
-- SharePoint Online member management
-- Document library operations
-- Permission synchronization
-- Metadata updates
-
----
-
-## 🔧 Planned Script Categories
-
-### Bulk Operations
-Scripts for processing large numbers of files/folders:
-- Batch renaming with pattern matching
-- Mass property updates
-- Recursive operations
-- Progress reporting
-
-### Fuzzy Matching
-Advanced file/folder matching algorithms:
-- Similar name detection
-- Smart consolidation
-- Duplicate identification
-- Merge operations
-
-### System Administration
-Utilities for system-level file management:
-- Font installation automation
-- Driver removal scripts
-- System file cleanup
-- Configuration backups
-
-### Network Shares
-Tools for managing files on network storage:
-- Share monitoring
-- Access auditing
-- Quota reporting
-- Cleanup automation
-
----
-
-## 📊 Reporting Features
-
-### File System Reports
-- Directory size analysis
-- File type distribution
-- Age-based statistics
-- Access pattern analysis
-
-### Audit Reports
-- Change tracking logs
-- Access logs
-- Modification history
-- Permission changes
-
 ---
 
 ## 🔒 Safety Features
 
-All scripts should include:
+All scripts include:
 - ✅ Dry-run mode for testing
 - ✅ Backup/rollback capabilities
 - ✅ Comprehensive logging
@@ -103,7 +113,7 @@ All scripts should include:
 
 ### Before Running:
 1. **Backup:** Always backup before bulk operations
-2. **Test:** Run in test environment first
+2. **Test:** Run in test environment first with WhatIf/DryRun modes
 3. **Verify:** Check paths and parameters
 4. **Log:** Enable detailed logging
 5. **Monitor:** Watch initial execution closely
@@ -122,19 +132,6 @@ All scripts should include:
 
 ---
 
-## 🚧 Status
-
-**In Development:** Scripts will be added as file management needs arise
-
-**Planned Scripts:**
-- Directory restructuring with fuzzy matching
-- Font installation automation
-- Network share monitoring
-- SharePoint member management
-- File system change detection
-
----
-
 ## 📞 Support
 
 For file management issues:
@@ -146,6 +143,5 @@ For file management issues:
 
 ---
 
-**Scripts in this folder:** Coming soon  
 **PowerShell Version Required:** 5.1+  
-**Common Modules Used:** SharePointPnPPowerShellOnline, PSWindowsUpdate
+**Common Modules Used:** SharePointPnPPowerShellOnline (when applicable)

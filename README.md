@@ -12,11 +12,10 @@ A comprehensive collection of IT automation scripts, templates, and tools for sy
 it-automation-tools/
 ├── AD_User_Export_Import_Tools/  # Active Directory user management
 ├── permissions/                   # Network share permission auditing
-├── file_management/               # File and folder management utilities
-├── network_tools/                 # Network administration scripts
-├── network_share_management/      # Network share folder management
+├── file_management/               # File, folder, and network share management
+├── printer_management/            # Printer driver and deployment tools
+├── terminal_services/             # Remote Desktop and terminal server utilities
 ├── Office_M365/                   # Office and Teams management
-├── powershell_utilities/          # General PowerShell utilities
 ├── rewst_workflows/               # Rewst workflow automation templates
 ├── email_templates/               # HTML email templates
 └── documentation/                 # Technical documentation and guides
@@ -44,23 +43,21 @@ cd it-automation-tools
 ### Permissions Management
 - **Get-FolderPermissionsAudit.ps1** - Comprehensive network share permissions audit with HTML/CSV reporting
 
-### File Management
+### File & Network Share Management
 - **Move-FilesWithFuzzyMatching.ps1** - Intelligent file reorganization with fuzzy matching
 - **Get-NCRFolderInventory.ps1** - Detailed folder inventory and analysis
+- **Get-TopLevelFolderReport.ps1** - Network share folder reporting with size analysis
+- **Move-OldFoldersToArchive.ps1** - Archive old folders based on modification date
 - **Fix-Windows11-PDFPreview.ps1** - Fix Windows 11 PDF preview issues
 
-### Network Tools
+### Printer Management
 - **Remove-ZebraPrintDrivers.ps1** - Zebra printer driver removal utility
 
-### Network Share Management
-- **Get-TopLevelFolderReport.ps1** - Network share folder reporting
-- **Move-OldFoldersToArchive.ps1** - Archive old folders based on age
+### Terminal Services
+- **Invoke-RDUserLogoff-Multi.ps1** - Remote Desktop session management across multiple servers
 
 ### Office/M365
 - **Reset-OfficeAndTeams.ps1** - Reset Office and Teams installations
-
-### PowerShell Utilities
-- **Invoke-RDUserLogoff-Multi.ps1** - Remote Desktop session management across multiple servers
 
 ### Rewst Workflows
 - **Student-Guardian-Data-Parser.jinja** - Skyward API data parsing template
@@ -116,6 +113,6 @@ These scripts are used across multiple client environments:
 
 ---
 
-**Version:** 2.1.0  
+**Version:** 2.2.0  
 **Last Update:** November 18, 2025  
 **Status:** Active Development
