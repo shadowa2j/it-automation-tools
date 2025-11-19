@@ -13,7 +13,7 @@
     - eDiscovery Manager role or Compliance Administrator role
     - Security & Compliance PowerShell connection
     
-    Confidence Level: 85%
+    Confidence Level: 90%
     Note: Export size limits and some parameters may need adjustment based on your tenant configuration.
 
 .EXAMPLE
@@ -99,7 +99,15 @@ foreach ($User in $UsersToExport) {
         if ($SearchStatus.Status -eq "Completed") {
             Write-Host "  Search completed successfully" -ForegroundColor Green
             Write-Host "    Items found: $($SearchStatus.Items)" -ForegroundColor Gray
-            Write-Host "    Size: $([math]::Round($SearchStatus.Size / 1MB, 2)) MB" -ForegroundColor Gray
+            
+            # Parse size - it comes as a string like "1.234 GB (1234567 bytes)"
+            $SizeString = $SearchStatus.Size
+            $SizeMB = 0
+            if ($SizeString -match '\((\d+) bytes\)') {
+                $SizeBytes = [int64]$matches[1]
+                $SizeMB = [math]::Round($SizeBytes / 1MB, 2)
+            }
+            Write-Host "    Size: $SizeMB MB" -ForegroundColor Gray
             
             # Create the export action
             Write-Host "  Creating export action..." -ForegroundColor Gray
@@ -122,8 +130,18 @@ foreach ($User in $UsersToExport) {
                 SearchName = $SearchName
                 ExportName = $ExportName
                 ItemCount = $SearchStatus.Items
-                SizeMB = [math]::Round($SearchStatus.Size / 1MB, 2)
+                SizeMB = $SizeMB
                 Status = "Export Initiated"
+            }
+        } else {
+            Write-Host "  Search did not complete successfully. Status: $($SearchStatus.Status)" -ForegroundColor Red
+            $ExportJobs += [PSCustomObject]@{
+                User = $User
+                SearchName = $SearchName
+                ExportName = "N/A"
+                ItemCount = 0
+                SizeMB = 0
+                Status = "Failed: Search status was $($SearchStatus.Status)"
             }
         }
         
@@ -149,6 +167,15 @@ Write-Host "============================================`n" -ForegroundColor Cya
 
 $ExportJobs | Format-Table -AutoSize
 
+# Count valid export jobs
+$ValidExportJobs = $ExportJobs | Where-Object { $_.ExportName -ne "N/A" }
+
+if ($ValidExportJobs.Count -eq 0) {
+    Write-Host "No valid exports were created. Please check the errors above." -ForegroundColor Red
+    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+    exit 1
+}
+
 # Monitor export status
 Write-Host "`nMonitoring export status (this may take several minutes)..." -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop monitoring (exports will continue in background)`n" -ForegroundColor Gray
@@ -161,40 +188,23 @@ while (-not $AllCompleted -and $MonitoringRounds -lt $MaxMonitoringRounds) {
     Start-Sleep -Seconds 10
     $MonitoringRounds++
     
-    $StatusUpdate = @()
     $CompletedCount = 0
     
-    foreach ($Job in $ExportJobs) {
-        if ($Job.ExportName -ne "N/A") {
-            try {
-                $ExportStatus = Get-ComplianceSearchAction -Identity $Job.ExportName -ErrorAction SilentlyContinue
-                
-                if ($ExportStatus) {
-                    $CurrentStatus = $ExportStatus.Status
-                    
-                    if ($CurrentStatus -eq "Completed") {
-                        $CompletedCount++
-                    }
-                    
-                    $StatusUpdate += [PSCustomObject]@{
-                        User = $Job.User
-                        Status = $CurrentStatus
-                        Progress = if ($ExportStatus.Results) { "Ready" } else { "Processing" }
-                    }
-                }
-            } catch {
-                $StatusUpdate += [PSCustomObject]@{
-                    User = $Job.User
-                    Status = "Unknown"
-                    Progress = "Error checking status"
-                }
+    foreach ($Job in $ValidExportJobs) {
+        try {
+            $ExportStatus = Get-ComplianceSearchAction -Identity $Job.ExportName -ErrorAction SilentlyContinue
+            
+            if ($ExportStatus -and $ExportStatus.Status -eq "Completed") {
+                $CompletedCount++
             }
+        } catch {
+            # Silently continue if we can't get status
         }
     }
     
-    Write-Host "`r[Round $MonitoringRounds/$MaxMonitoringRounds] Completed: $CompletedCount/$($ExportJobs.Count)" -NoNewline
+    Write-Host "`r[Round $MonitoringRounds/$MaxMonitoringRounds] Completed: $CompletedCount/$($ValidExportJobs.Count)" -NoNewline
     
-    if ($CompletedCount -eq $ExportJobs.Count) {
+    if ($CompletedCount -eq $ValidExportJobs.Count) {
         $AllCompleted = $true
     }
 }
