@@ -10,8 +10,8 @@
   .NOTES
     Original Author: Aaron J. Stevenson
     Modified by: Bryan (Quality Computer Solutions)
-    Modifications: Enhanced error handling, NinjaRMM compatibility, handles file locking issues
-    Version: 1.4.0
+    Modifications: Enhanced error handling, NinjaRMM compatibility, requires .NET 8 specifically
+    Version: 1.5.0
 #>
 
 function Write-Log {
@@ -77,16 +77,42 @@ function Get-InstalledApps {
   return $MatchedApps | Sort-Object { [version]$_.BundleVersion } -Descending
 }
 
-function Test-DotNetVersion {
+function Test-DotNet8Desktop {
+  # DCU 5.5 specifically requires .NET 8.x Desktop Runtime (not 9, not 10)
   $HasDotNet8 = $false
+  
+  # Method 1: Check for WindowsDesktop.App folder - ONLY version 8.x
   $DesktopAppPath = "${env:ProgramFiles}\dotnet\shared\Microsoft.WindowsDesktop.App"
   if (Test-Path $DesktopAppPath) {
     $DotNet8Folders = Get-ChildItem -Path $DesktopAppPath -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '8.*' }
     if ($DotNet8Folders) {
-      Write-Log "Found .NET Desktop Runtime 8.x: $($DotNet8Folders[0].Name)"
+      Write-Log "Found .NET 8 Desktop Runtime: $($DotNet8Folders[0].Name)"
       return $true
     }
+    
+    # Log what versions ARE installed
+    $AllVersions = Get-ChildItem -Path $DesktopAppPath -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    if ($AllVersions) {
+      Write-Log "Found .NET Desktop Runtime versions: $($AllVersions -join ', ')"
+      Write-Log "Dell Command Update requires .NET 8.x specifically (not 9, 10, etc.)" -Level 'WARNING'
+    }
   }
+  
+  # Method 2: Try dotnet --list-runtimes command - look for ONLY 8.x
+  try {
+    $DotNetPath = "${env:ProgramFiles}\dotnet\dotnet.exe"
+    if (Test-Path $DotNetPath) {
+      $Runtimes = & $DotNetPath --list-runtimes 2>&1 | Out-String
+      if ($Runtimes -match 'Microsoft\.WindowsDesktop\.App 8\.') {
+        Write-Log "Found .NET 8 Desktop Runtime via dotnet CLI"
+        return $true
+      }
+    }
+  }
+  catch {
+    Write-Log "Could not check dotnet CLI: $($_.Exception.Message)" -Level 'WARNING'
+  }
+  
   return $false
 }
 
@@ -158,39 +184,63 @@ function Remove-IncompatibleApps {
   }
 }
 
-function Install-DotNetDesktopRuntime {
-  Write-Log "Checking for .NET 8 Desktop Runtime..."
+function Install-DotNet8DesktopRuntime {
+  Write-Log "Checking for .NET 8 Desktop Runtime (required by Dell Command Update 5.5)..."
   
-  if (Test-DotNetVersion) {
+  if (Test-DotNet8Desktop) {
     Write-Log ".NET 8 Desktop Runtime is installed"
     return
   }
   
   Write-Log ".NET 8 Desktop Runtime not found - installing..."
+  Write-Log "Note: DCU requires .NET 8.x specifically, not newer versions"
   
   try {
     $Arch = Get-Architecture
+    # .NET 8.0.11 LTS - specifically version 8
     $DotNetUrl = "https://download.visualstudio.microsoft.com/download/pr/d6cd4de9-bb6f-4056-bc6c-4ba4c4c11c85/bd2db1af3db61b0e6a0302db21ff3a44/windowsdesktop-runtime-8.0.11-win-$Arch.exe"
     $DotNetInstaller = Join-Path -Path $env:TEMP -ChildPath "windowsdesktop-runtime-8.0.11-win-$Arch.exe"
     
-    Write-Log "Downloading .NET 8..."
+    Write-Log "Downloading .NET 8.0.11 Desktop Runtime..."
     Invoke-WebRequest -Uri $DotNetUrl -OutFile $DotNetInstaller -TimeoutSec 300 -ErrorAction Stop
     
-    Write-Log "Installing .NET 8..."
+    if (-not (Test-Path $DotNetInstaller)) {
+      throw ".NET installer download failed"
+    }
+    
+    Write-Log "Installing .NET 8 Desktop Runtime..."
     $InstallProcess = Start-Process -Wait -NoNewWindow -FilePath $DotNetInstaller -ArgumentList '/install /quiet /norestart' -PassThru
     
-    if ($InstallProcess.ExitCode -eq 0 -or $InstallProcess.ExitCode -eq 3010 -or $InstallProcess.ExitCode -eq 1638) {
-      Write-Log ".NET 8 installed (exit code: $($InstallProcess.ExitCode))"
-      Start-Sleep -Seconds 5
+    Write-Log ".NET installer exit code: $($InstallProcess.ExitCode)"
+    
+    if ($InstallProcess.ExitCode -eq 0) {
+      Write-Log ".NET 8 Desktop Runtime installed successfully"
+    }
+    elseif ($InstallProcess.ExitCode -eq 3010) {
+      Write-Log ".NET 8 Desktop Runtime installed (reboot recommended)"
+    }
+    elseif ($InstallProcess.ExitCode -eq 1638) {
+      Write-Log ".NET 8 Desktop Runtime already installed (exit code 1638)"
     }
     else {
-      throw ".NET installation failed with exit code: $($InstallProcess.ExitCode)"
+      throw ".NET 8 installation failed with exit code: $($InstallProcess.ExitCode)"
     }
     
     Remove-Item $DotNetInstaller -Force -ErrorAction SilentlyContinue
+    
+    # Wait for installation to finalize
+    Start-Sleep -Seconds 5
+    
+    # Verify installation
+    if (Test-DotNet8Desktop) {
+      Write-Log ".NET 8 Desktop Runtime verified after installation"
+    }
+    else {
+      Write-Log ".NET 8 Desktop Runtime verification failed - DCU installation may fail" -Level 'WARNING'
+    }
   }
   catch {
-    Write-Log "Failed to install .NET 8: $($_.Exception.Message)" -Level 'ERROR'
+    Write-Log "Failed to install .NET 8 Desktop Runtime: $($_.Exception.Message)" -Level 'ERROR'
     throw
   }
 }
@@ -219,6 +269,11 @@ function Install-DellCommandUpdate {
 
   if ($NeedsInstall) {
     try {
+      # Verify .NET 8 is installed before attempting DCU installation
+      if (-not (Test-DotNet8Desktop)) {
+        throw ".NET 8 Desktop Runtime is required but not detected. Installation will fail."
+      }
+      
       # Stop Dell services that might interfere
       Stop-DellServices
       
@@ -272,7 +327,7 @@ function Install-DellCommandUpdate {
             throw "File locking issue detected. Please reboot the system and retry."
           }
         }
-        throw "Installation prerequisites not met (exit code 4)"
+        throw "Installation prerequisites not met (exit code 4). Ensure .NET 8 Desktop Runtime is installed."
       }
       else {
         throw "Installation failed with exit code: $($InstallProcess.ExitCode)"
@@ -355,7 +410,7 @@ if ([Net.ServicePointManager]::SecurityProtocol -notcontains 'Tls12' -and [Net.S
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 }
 
-Write-Log "===== Dell Command Update Script v1.4.0 ====="
+Write-Log "===== Dell Command Update Script v1.5.0 ====="
 Write-Log "User: $env:USERNAME | Computer: $env:COMPUTERNAME"
 
 $Manufacturer = (Get-CimInstance -ClassName Win32_BIOS).Manufacturer
@@ -366,7 +421,7 @@ if ($Manufacturer -notlike '*Dell*') {
 
 try {
   Remove-IncompatibleApps
-  Install-DotNetDesktopRuntime
+  Install-DotNet8DesktopRuntime
   Install-DellCommandUpdate
   Invoke-DellCommandUpdate
   Write-Log "===== Script Completed Successfully ====="
