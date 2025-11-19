@@ -1,11 +1,13 @@
 <#
 .SYNOPSIS
-    Automates the creation of eDiscovery Content Searches and Export actions for Exchange Online mailboxes.
+    Automates the creation of eDiscovery Content Searches for Exchange Online mailboxes.
 
 .DESCRIPTION
-    This script creates individual compliance searches for specified users and initiates PST exports.
-    Exports are split into 10GB files automatically. The script monitors export status and provides
-    download instructions when ready.
+    This script creates individual compliance searches for specified users and monitors their completion.
+    After searches complete, provides direct links to manually export via the Purview compliance portal.
+    
+    NOTE: As of May 26, 2025, Microsoft removed PowerShell-based export functionality.
+    Exports must now be initiated manually through the compliance portal UI.
 
 .NOTES
     Requirements:
@@ -13,8 +15,7 @@
     - eDiscovery Manager role or Compliance Administrator role
     - Security & Compliance PowerShell connection
     
-    Confidence Level: 90%
-    Note: Export size limits and some parameters may need adjustment based on your tenant configuration.
+    Confidence Level: 95%
 
 .EXAMPLE
     .\Export-MailboxesToPST.ps1
@@ -33,7 +34,7 @@ $UsersToExport = @(
     "[email protected]"
 )
 
-# Network share path where you'll download the PST files (for reference only)
+# Network share path where you'll download the PST files (for reference in notes)
 $DownloadPath = "\\server\share\MailboxExports"
 
 # Prefix for search names (helps identify these searches later)
@@ -45,30 +46,48 @@ $SearchPrefix = "MailboxExport"
 
 # Connect to Security & Compliance PowerShell
 Write-Host "Connecting to Security & Compliance Center..." -ForegroundColor Cyan
-Write-Host "Note: You may need to authenticate in your browser or use a device code." -ForegroundColor Gray
-try {
-    # Try with UseRPSSession first (more compatible)
-    Connect-IPPSSession -UseRPSSession -ErrorAction Stop
-    Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
-} catch {
-    # If that fails, try device code authentication
-    Write-Host "Initial connection failed. Trying device code authentication..." -ForegroundColor Yellow
+
+# Detect if running in ISE
+if ($psISE) {
+    Write-Host "PowerShell ISE detected - using compatible authentication method..." -ForegroundColor Yellow
+    Write-Host "Note: You'll authenticate via device code. Follow the instructions." -ForegroundColor Gray
     try {
         Connect-IPPSSession -Device -ErrorAction Stop
         Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
     } catch {
-        Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
-        Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
-        Write-Host "Try running from a non-elevated PowerShell window." -ForegroundColor Yellow
+        Write-Host "Failed to connect: $_" -ForegroundColor Red
+        Write-Host "PowerShell ISE has limited authentication support." -ForegroundColor Yellow
+        Write-Host "Please run this script from regular PowerShell (not ISE) for best results." -ForegroundColor Yellow
         exit 1
+    }
+} else {
+    Write-Host "Note: You may need to authenticate in your browser." -ForegroundColor Gray
+    try {
+        # Try with UseRPSSession first (more compatible)
+        Connect-IPPSSession -UseRPSSession -ErrorAction Stop
+        Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
+    } catch {
+        # If that fails, try device code authentication
+        Write-Host "Initial connection failed. Trying device code authentication..." -ForegroundColor Yellow
+        try {
+            Connect-IPPSSession -Device -ErrorAction Stop
+            Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
+        } catch {
+            Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
+            Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
+            exit 1
+        }
     }
 }
 
 # Results tracking
-$ExportJobs = @()
+$SearchJobs = @()
 $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 
-Write-Host "`nStarting mailbox export process for $($UsersToExport.Count) user(s)..." -ForegroundColor Cyan
+Write-Host "`n============================================" -ForegroundColor Cyan
+Write-Host "MAILBOX SEARCH AUTOMATION" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "Creating compliance searches for $($UsersToExport.Count) user(s)..." -ForegroundColor White
 Write-Host "Timestamp: $Timestamp`n" -ForegroundColor Gray
 
 foreach ($User in $UsersToExport) {
@@ -113,57 +132,52 @@ foreach ($User in $UsersToExport) {
             # Parse size - it comes as a string like "1.234 GB (1234567 bytes)"
             $SizeString = $SearchStatus.Size
             $SizeMB = 0
+            $SizeDisplay = "Unknown"
             if ($SizeString -match '\((\d+) bytes\)') {
                 $SizeBytes = [int64]$matches[1]
                 $SizeMB = [math]::Round($SizeBytes / 1MB, 2)
+                $SizeGB = [math]::Round($SizeBytes / 1GB, 2)
+                if ($SizeGB -gt 1) {
+                    $SizeDisplay = "$SizeGB GB"
+                } else {
+                    $SizeDisplay = "$SizeMB MB"
+                }
             }
-            Write-Host "    Size: $SizeMB MB" -ForegroundColor Gray
+            Write-Host "    Size: $SizeDisplay" -ForegroundColor Gray
             
-            # Create the export action
-            Write-Host "  Creating export action..." -ForegroundColor Gray
-            $ExportName = "$SearchName`_Export"
-            
-            $Export = New-ComplianceSearchAction -SearchName $SearchName `
-                                                 -Export `
-                                                 -Format FxStream `
-                                                 -ExchangeArchiveFormat PerUserPst `
-                                                 -Scope IndexedItemsOnly `
-                                                 -EnableDedupe $true `
-                                                 -SharePointArchiveFormat IndividualMessage `
-                                                 -ErrorAction Stop
-            
-            Write-Host "  Export created: $ExportName" -ForegroundColor Green
-            
-            # Track this export job
-            $ExportJobs += [PSCustomObject]@{
+            # Track this search job
+            $SearchJobs += [PSCustomObject]@{
                 User = $User
                 SearchName = $SearchName
-                ExportName = $ExportName
                 ItemCount = $SearchStatus.Items
                 SizeMB = $SizeMB
-                Status = "Export Initiated"
+                SizeDisplay = $SizeDisplay
+                Status = "Completed - Ready for Export"
+                ComplianceURL = "https://compliance.microsoft.com/contentsearch?viewid=search&search=$([System.Web.HttpUtility]::UrlEncode($SearchName))"
             }
         } else {
             Write-Host "  Search did not complete successfully. Status: $($SearchStatus.Status)" -ForegroundColor Red
-            $ExportJobs += [PSCustomObject]@{
+            $SearchJobs += [PSCustomObject]@{
                 User = $User
                 SearchName = $SearchName
-                ExportName = "N/A"
                 ItemCount = 0
                 SizeMB = 0
+                SizeDisplay = "N/A"
                 Status = "Failed: Search status was $($SearchStatus.Status)"
+                ComplianceURL = "N/A"
             }
         }
         
     } catch {
         Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
-        $ExportJobs += [PSCustomObject]@{
+        $SearchJobs += [PSCustomObject]@{
             User = $User
             SearchName = $SearchName
-            ExportName = "N/A"
             ItemCount = 0
             SizeMB = 0
+            SizeDisplay = "N/A"
             Status = "Failed: $($_.Exception.Message)"
+            ComplianceURL = "N/A"
         }
     }
     
@@ -171,95 +185,101 @@ foreach ($User in $UsersToExport) {
 }
 
 # Display summary
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "EXPORT JOBS SUMMARY" -ForegroundColor Cyan
+Write-Host "`n============================================" -ForegroundColor Cyan
+Write-Host "SEARCH RESULTS SUMMARY" -ForegroundColor Cyan
 Write-Host "============================================`n" -ForegroundColor Cyan
 
-$ExportJobs | Format-Table -AutoSize
+$SearchJobs | Format-Table User, ItemCount, SizeDisplay, Status -AutoSize
 
-# Count valid export jobs
-$ValidExportJobs = $ExportJobs | Where-Object { $_.ExportName -ne "N/A" }
+# Count successful searches
+$SuccessfulSearches = $SearchJobs | Where-Object { $_.Status -like "*Ready for Export*" }
 
-if ($ValidExportJobs.Count -eq 0) {
-    Write-Host "No valid exports were created. Please check the errors above." -ForegroundColor Red
+if ($SuccessfulSearches.Count -eq 0) {
+    Write-Host "No searches completed successfully. Please check the errors above." -ForegroundColor Red
     Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
     exit 1
 }
 
-# Monitor export status
-Write-Host "`nMonitoring export status (this may take several minutes)..." -ForegroundColor Cyan
-Write-Host "Press Ctrl+C to stop monitoring (exports will continue in background)`n" -ForegroundColor Gray
-
-$AllCompleted = $false
-$MonitoringRounds = 0
-$MaxMonitoringRounds = 60  # 10 minutes with 10-second intervals
-
-while (-not $AllCompleted -and $MonitoringRounds -lt $MaxMonitoringRounds) {
-    Start-Sleep -Seconds 10
-    $MonitoringRounds++
-    
-    $CompletedCount = 0
-    
-    foreach ($Job in $ValidExportJobs) {
-        try {
-            $ExportStatus = Get-ComplianceSearchAction -Identity $Job.ExportName -ErrorAction SilentlyContinue
-            
-            if ($ExportStatus -and $ExportStatus.Status -eq "Completed") {
-                $CompletedCount++
-            }
-        } catch {
-            # Silently continue if we can't get status
-        }
-    }
-    
-    Write-Host "`r[Round $MonitoringRounds/$MaxMonitoringRounds] Completed: $CompletedCount/$($ValidExportJobs.Count)" -NoNewline
-    
-    if ($CompletedCount -eq $ValidExportJobs.Count) {
-        $AllCompleted = $true
-    }
-}
-
-Write-Host "`n"
-
-# Final status check and download instructions
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "FINAL EXPORT STATUS" -ForegroundColor Cyan
+# Provide export instructions with direct links
+Write-Host "`n============================================" -ForegroundColor Cyan
+Write-Host "EXPORT INSTRUCTIONS" -ForegroundColor Cyan
 Write-Host "============================================`n" -ForegroundColor Cyan
 
-foreach ($Job in $ExportJobs) {
-    if ($Job.ExportName -ne "N/A") {
-        Write-Host "User: $($Job.User)" -ForegroundColor Yellow
-        Write-Host "  Search Name: $($Job.SearchName)" -ForegroundColor Gray
-        Write-Host "  Export Name: $($Job.ExportName)" -ForegroundColor Gray
-        
-        try {
-            $ExportStatus = Get-ComplianceSearchAction -Identity $Job.ExportName -ErrorAction Stop
-            Write-Host "  Status: $($ExportStatus.Status)" -ForegroundColor $(if ($ExportStatus.Status -eq "Completed") { "Green" } else { "Yellow" })
-            
-            if ($ExportStatus.Status -eq "Completed") {
-                Write-Host "  Download: Ready - Use eDiscovery Export Tool" -ForegroundColor Green
-                Write-Host "  Target Path: $DownloadPath\$($Job.User.Replace('@','_'))" -ForegroundColor Gray
-            }
-        } catch {
-            Write-Host "  Status: Error checking status" -ForegroundColor Red
-        }
-        Write-Host ""
-    }
+Write-Host "All searches have completed successfully!" -ForegroundColor Green
+Write-Host "Microsoft requires exports to be initiated manually through the compliance portal.`n" -ForegroundColor Yellow
+
+Write-Host "QUICK EXPORT LINKS:" -ForegroundColor White
+Write-Host "Click each link below to export the corresponding mailbox:`n" -ForegroundColor Gray
+
+foreach ($Job in $SuccessfulSearches) {
+    Write-Host "User: $($Job.User)" -ForegroundColor Yellow
+    Write-Host "  Items: $($Job.ItemCount) | Size: $($Job.SizeDisplay)" -ForegroundColor Gray
+    Write-Host "  Direct Link: $($Job.ComplianceURL)" -ForegroundColor Cyan
+    Write-Host ""
 }
 
+Write-Host "`n============================================" -ForegroundColor Cyan
+Write-Host "EXPORT STEPS (for each link above)" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "NEXT STEPS" -ForegroundColor Cyan
+Write-Host "1. Click the direct link for the user" -ForegroundColor White
+Write-Host "2. Click 'Actions' > 'Export results'" -ForegroundColor White
+Write-Host "3. Configure export options:" -ForegroundColor White
+Write-Host "   - Output options: All items, excluding ones with unrecognized format" -ForegroundColor Gray
+Write-Host "   - Export Exchange content as: One PST file per mailbox" -ForegroundColor Gray
+Write-Host "   - Enable deduplication: Yes (recommended)" -ForegroundColor Gray
+Write-Host "4. Click 'Export'" -ForegroundColor White
+Write-Host "5. Wait for export to complete (monitor in 'Exports' tab)" -ForegroundColor White
+Write-Host "6. Click 'Download results' and install eDiscovery Export Tool if prompted" -ForegroundColor White
+Write-Host "7. Specify download location: $DownloadPath" -ForegroundColor White
+Write-Host "`nNote: PST files will automatically split into 10GB chunks if larger." -ForegroundColor Yellow
+
+Write-Host "`n============================================" -ForegroundColor Cyan
+Write-Host "ALTERNATIVE: Batch Export" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "1. Go to: https://compliance.microsoft.com/contentsearch" -ForegroundColor White
-Write-Host "2. Click on each completed export" -ForegroundColor White
-Write-Host "3. Click 'Download results'" -ForegroundColor White
-Write-Host "4. Install the eDiscovery Export Tool if prompted" -ForegroundColor White
-Write-Host "5. Specify your download path: $DownloadPath" -ForegroundColor White
-Write-Host "6. PST files will be split into 10GB chunks automatically" -ForegroundColor White
-Write-Host "`nNote: The eDiscovery Export Tool is required by Microsoft for downloading." -ForegroundColor Yellow
-Write-Host "Direct download via PowerShell is not supported for compliance reasons.`n" -ForegroundColor Yellow
+Write-Host "To export all searches at once:" -ForegroundColor White
+Write-Host "1. Go to: https://compliance.microsoft.com/contentsearch" -ForegroundColor Cyan
+Write-Host "2. Select multiple searches using the checkboxes" -ForegroundColor White
+Write-Host "3. Click 'Actions' > 'Export results' to batch export" -ForegroundColor White
+
+# Save search details to file for reference
+$OutputFile = "MailboxExportSearches_$Timestamp.txt"
+$OutputPath = Join-Path $PSScriptRoot $OutputFile
+
+$OutputContent = @"
+Mailbox Export Searches - Created: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+============================================
+
+"@
+
+foreach ($Job in $SearchJobs) {
+    $OutputContent += @"
+User: $($Job.User)
+Search Name: $($Job.SearchName)
+Items: $($Job.ItemCount)
+Size: $($Job.SizeDisplay)
+Status: $($Job.Status)
+Direct Link: $($Job.ComplianceURL)
+
+"@
+}
+
+$OutputContent += @"
+
+Download Location: $DownloadPath
+
+Export Instructions:
+1. Click each direct link above
+2. Click Actions > Export results
+3. Follow the export wizard
+4. Download using eDiscovery Export Tool
+
+"@
+
+$OutputContent | Out-File -FilePath $OutputPath -Encoding UTF8
+Write-Host "`nSearch details saved to: $OutputPath" -ForegroundColor Green
 
 # Disconnect
-Write-Host "Disconnecting from Security & Compliance Center..." -ForegroundColor Cyan
+Write-Host "`nDisconnecting from Security & Compliance Center..." -ForegroundColor Cyan
 Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
 Write-Host "Script completed!" -ForegroundColor Green
+Write-Host "`nYou can now proceed with manual exports using the links above.`n" -ForegroundColor White
