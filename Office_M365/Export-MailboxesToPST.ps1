@@ -33,7 +33,7 @@ $UsersToExport = @(
 )
 
 # Network share path where you'll download the PST files (for reference in notes)
-$DownloadPath = "E:\Mailbox_Export"
+$DownloadPath = "E:\OneDrive - PRISM Plastics\Scripts"
 
 # Prefix for search names (helps identify these searches later)
 $SearchPrefix = "MailboxExport"
@@ -61,14 +61,20 @@ if ($psISE) {
 } else {
     Write-Host "Note: You may need to authenticate in your browser." -ForegroundColor Gray
     try {
-        # Use UseRPSSession for compatibility
+        # Try with UseRPSSession first (more compatible)
         Connect-IPPSSession -UseRPSSession -ErrorAction Stop
         Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
     } catch {
-        Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
-        Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
-        Write-Host "If authentication keeps failing, try updating the module: Update-Module ExchangeOnlineManagement" -ForegroundColor Yellow
-        exit 1
+        # If that fails, try device code authentication
+        Write-Host "Initial connection failed. Trying device code authentication..." -ForegroundColor Yellow
+        try {
+            Connect-IPPSSession -Device -ErrorAction Stop
+            Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
+        } catch {
+            Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
+            Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
+            exit 1
+        }
     }
 }
 
