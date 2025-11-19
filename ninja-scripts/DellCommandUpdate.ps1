@@ -10,8 +10,8 @@
   .NOTES
     Original Author: Aaron J. Stevenson
     Modified by: Bryan (Quality Computer Solutions)
-    Modifications: Enhanced error handling, NinjaRMM compatibility, proper .NET 8 detection
-    Version: 1.3.0
+    Modifications: Enhanced error handling, NinjaRMM compatibility, handles file locking issues
+    Version: 1.4.0
 #>
 
 function Write-Log {
@@ -31,8 +31,7 @@ function Write-Log {
     }
     Write-EventLog -LogName Application -Source 'DellCommandUpdate' -EntryType $EventType -EventId 1000 -Message $Message -ErrorAction SilentlyContinue
   }
-  catch {
-  }
+  catch { }
 }
 
 function Get-Architecture {
@@ -80,52 +79,61 @@ function Get-InstalledApps {
 
 function Test-DotNetVersion {
   $HasDotNet8 = $false
-  
-  # Method 1: Check for WindowsDesktop.App folder
   $DesktopAppPath = "${env:ProgramFiles}\dotnet\shared\Microsoft.WindowsDesktop.App"
   if (Test-Path $DesktopAppPath) {
     $DotNet8Folders = Get-ChildItem -Path $DesktopAppPath -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '8.*' }
     if ($DotNet8Folders) {
-      Write-Log "Found .NET Desktop Runtime 8.x folder: $($DotNet8Folders[0].Name)"
-      $HasDotNet8 = $true
-      return $HasDotNet8
+      Write-Log "Found .NET Desktop Runtime 8.x: $($DotNet8Folders[0].Name)"
+      return $true
     }
   }
-  
-  # Method 2: Try dotnet --list-runtimes command
-  try {
-    $DotNetPath = "${env:ProgramFiles}\dotnet\dotnet.exe"
-    if (Test-Path $DotNetPath) {
-      $Runtimes = & $DotNetPath --list-runtimes 2>&1 | Out-String
-      if ($Runtimes -match 'Microsoft\.WindowsDesktop\.App 8\.') {
-        Write-Log "Found .NET Desktop Runtime 8.x via dotnet CLI"
-        $HasDotNet8 = $true
-        return $HasDotNet8
-      }
-    }
-  }
-  catch {
-    Write-Log "Could not check dotnet CLI: $($_.Exception.Message)" -Level 'WARNING'
-  }
-  
-  # Method 3: Check registry
-  $DotNetKeys = @(
-    'HKLM:\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost',
-    'HKLM:\SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x64\sharedhost'
+  return $false
+}
+
+function Stop-DellServices {
+  Write-Log "Stopping Dell services that may interfere..."
+  $DellServices = @(
+    'DellClientManagementService',
+    'Dell SupportAssist Agent',
+    'DellUpdate',
+    'Dell Hardware Support'
   )
   
-  foreach ($Key in $DotNetKeys) {
-    if (Test-Path $Key) {
-      $Version = (Get-ItemProperty -Path $Key -Name 'Version' -ErrorAction SilentlyContinue).Version
-      if ($Version -and $Version -like '8.*') {
-        Write-Log "Found .NET shared host version: $Version"
-        $HasDotNet8 = $true
-        return $HasDotNet8
+  foreach ($ServiceName in $DellServices) {
+    $Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($Service -and $Service.Status -eq 'Running') {
+      try {
+        Write-Log "Stopping service: $ServiceName"
+        Stop-Service -Name $ServiceName -Force -ErrorAction Stop
+        Start-Sleep -Seconds 2
+        Write-Log "Stopped: $ServiceName"
+      }
+      catch {
+        Write-Log "Could not stop $ServiceName : $($_.Exception.Message)" -Level 'WARNING'
       }
     }
   }
+}
+
+function Clear-DellTempFiles {
+  Write-Log "Clearing Dell temporary installation files..."
+  $TempPaths = @(
+    "$env:TEMP\Dell*",
+    "$env:SystemRoot\TEMP\Dell*",
+    "$env:ProgramData\Dell\UpdateService\*"
+  )
   
-  return $HasDotNet8
+  foreach ($Path in $TempPaths) {
+    if (Test-Path $Path) {
+      try {
+        Remove-Item -Path $Path -Recurse -Force -ErrorAction Stop
+        Write-Log "Cleaned: $Path"
+      }
+      catch {
+        Write-Log "Could not clean $Path : $($_.Exception.Message)" -Level 'WARNING'
+      }
+    }
+  }
 }
 
 function Remove-IncompatibleApps {
@@ -134,18 +142,17 @@ function Remove-IncompatibleApps {
   
   if ($IncompatibleApps) { Write-Log 'Incompatible applications detected' }
   foreach ($App in $IncompatibleApps) {
-    Write-Log "Attempting to remove [$($App.DisplayName)]"
+    Write-Log "Removing: $($App.DisplayName)"
     try {
       if ($App.UninstallString -match 'msiexec') {
         $Guid = [regex]::Match($App.UninstallString, '\{[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\}').Value
         Start-Process -NoNewWindow -Wait -FilePath 'msiexec.exe' -ArgumentList "/x $Guid /quiet /qn"
       }
       else { Start-Process -NoNewWindow -Wait -FilePath $App.UninstallString -ArgumentList '/quiet' }
-      Write-Log "Successfully removed $($App.DisplayName)"
+      Write-Log "Removed: $($App.DisplayName)"
     }
     catch { 
-      Write-Log "Failed to remove $($App.DisplayName)" -Level 'ERROR'
-      Write-Log $_.Exception.Message -Level 'ERROR'
+      Write-Log "Failed to remove $($App.DisplayName): $($_.Exception.Message)" -Level 'ERROR'
       exit 1
     }
   }
@@ -154,68 +161,43 @@ function Remove-IncompatibleApps {
 function Install-DotNetDesktopRuntime {
   Write-Log "Checking for .NET 8 Desktop Runtime..."
   
-  $HasDotNet8 = Test-DotNetVersion
-  
-  if ($HasDotNet8) {
-    Write-Log ".NET 8 Desktop Runtime is already installed"
+  if (Test-DotNetVersion) {
+    Write-Log ".NET 8 Desktop Runtime is installed"
     return
   }
   
-  Write-Log ".NET 8 Desktop Runtime not found - installing..." -Level 'WARNING'
+  Write-Log ".NET 8 Desktop Runtime not found - installing..."
   
   try {
     $Arch = Get-Architecture
     $DotNetUrl = "https://download.visualstudio.microsoft.com/download/pr/d6cd4de9-bb6f-4056-bc6c-4ba4c4c11c85/bd2db1af3db61b0e6a0302db21ff3a44/windowsdesktop-runtime-8.0.11-win-$Arch.exe"
     $DotNetInstaller = Join-Path -Path $env:TEMP -ChildPath "windowsdesktop-runtime-8.0.11-win-$Arch.exe"
     
-    Write-Log "Downloading .NET 8 Desktop Runtime..."
+    Write-Log "Downloading .NET 8..."
     Invoke-WebRequest -Uri $DotNetUrl -OutFile $DotNetInstaller -TimeoutSec 300 -ErrorAction Stop
     
-    if (-not (Test-Path $DotNetInstaller)) {
-      throw ".NET installer download failed"
-    }
-    
-    Write-Log "Installing .NET 8 Desktop Runtime (this may take a minute)..."
+    Write-Log "Installing .NET 8..."
     $InstallProcess = Start-Process -Wait -NoNewWindow -FilePath $DotNetInstaller -ArgumentList '/install /quiet /norestart' -PassThru
     
-    Write-Log ".NET installer exit code: $($InstallProcess.ExitCode)"
-    
-    if ($InstallProcess.ExitCode -eq 0) {
-      Write-Log ".NET 8 Desktop Runtime installed successfully"
-    }
-    elseif ($InstallProcess.ExitCode -eq 3010) {
-      Write-Log ".NET 8 Desktop Runtime installed (reboot recommended)"
-    }
-    elseif ($InstallProcess.ExitCode -eq 1638) {
-      Write-Log ".NET 8 Desktop Runtime already installed (exit code 1638)"
+    if ($InstallProcess.ExitCode -eq 0 -or $InstallProcess.ExitCode -eq 3010 -or $InstallProcess.ExitCode -eq 1638) {
+      Write-Log ".NET 8 installed (exit code: $($InstallProcess.ExitCode))"
+      Start-Sleep -Seconds 5
     }
     else {
       throw ".NET installation failed with exit code: $($InstallProcess.ExitCode)"
     }
     
     Remove-Item $DotNetInstaller -Force -ErrorAction SilentlyContinue
-    
-    # Wait for installation to finalize
-    Start-Sleep -Seconds 5
-    
-    # Verify installation
-    if (Test-DotNetVersion) {
-      Write-Log ".NET 8 Desktop Runtime verified after installation"
-    }
-    else {
-      Write-Log ".NET 8 Desktop Runtime verification failed after installation" -Level 'WARNING'
-    }
   }
   catch {
-    Write-Log "Failed to install .NET 8 Desktop Runtime: $($_.Exception.Message)" -Level 'ERROR'
-    throw "DCU installation will fail without .NET 8 Desktop Runtime"
+    Write-Log "Failed to install .NET 8: $($_.Exception.Message)" -Level 'ERROR'
+    throw
   }
 }
 
 function Install-DellCommandUpdate {
   $OSInfo = Get-CimInstance -ClassName Win32_OperatingSystem
-  $OSVersion = [System.Environment]::OSVersion.Version
-  $OSBuild = $OSVersion.Build
+  $OSBuild = [System.Environment]::OSVersion.Version.Build
   
   Write-Log "OS: $($OSInfo.Caption) (Build $OSBuild)"
   Write-Log "Architecture: $(Get-Architecture)"
@@ -223,136 +205,139 @@ function Install-DellCommandUpdate {
   $DownloadURL = 'https://dl.dell.com/FOLDER13309509M/1/Dell-Command-Update-Application_PPWHH_WIN64_5.5.0_A00.EXE'
   $Version = '5.5.0'
   
-  $Installer = Join-Path -Path $env:TEMP -ChildPath 'Dell-Command-Update-Application_PPWHH_WIN64_5.5.0_A00.EXE'
+  # Use unique filename to avoid conflicts
+  $UniqueID = (Get-Date -Format 'yyyyMMddHHmmss')
+  $Installer = Join-Path -Path $env:TEMP -ChildPath "DCU_${UniqueID}.exe"
   
   $InstalledApp = Get-InstalledApps -DisplayName 'Dell Command | Update'
   $CurrentVersion = $InstalledApp.DisplayVersion
   if ($CurrentVersion -is [array]) { $CurrentVersion = $CurrentVersion[0] }
   
-  Write-Log "Installed Dell Command Update: $CurrentVersion"
-  Write-Log "Target Dell Command Update: $Version"
+  Write-Log "Installed: $CurrentVersion | Target: $Version"
 
-  $NeedsInstall = $false
-  if ([string]::IsNullOrEmpty($CurrentVersion)) {
-    $NeedsInstall = $true
-    Write-Log "No existing installation detected"
-  }
-  elseif ([version]$CurrentVersion -lt [version]$Version) {
-    $NeedsInstall = $true
-    Write-Log "Upgrade needed"
-  }
+  $NeedsInstall = [string]::IsNullOrEmpty($CurrentVersion) -or ([version]$CurrentVersion -lt [version]$Version)
 
   if ($NeedsInstall) {
     try {
+      # Stop Dell services that might interfere
+      Stop-DellServices
+      
+      # Clean temporary files
+      Clear-DellTempFiles
+      
       Write-Log "Downloading Dell Command Update..."
       $UserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       Invoke-WebRequest -Uri $DownloadURL -OutFile $Installer -UserAgent $UserAgent -TimeoutSec 300 -ErrorAction Stop
 
       if (-not (Test-Path $Installer)) {
-        throw "Installer download failed"
+        throw "Download failed"
       }
       
       $FileSize = (Get-Item $Installer).Length / 1MB
       Write-Log "Downloaded: $([math]::Round($FileSize, 2)) MB"
 
-      Write-Log 'Installing Dell Command Update...'
-      $LogFile = Join-Path -Path $env:TEMP -ChildPath "DCU_Install_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+      Write-Log "Installing Dell Command Update..."
+      $LogFile = Join-Path -Path $env:TEMP -ChildPath "DCU_Install_${UniqueID}.log"
       $InstallArgs = "/s /l=`"$LogFile`""
       
+      # Extract to specific directory to avoid file locking issues
+      $ExtractPath = Join-Path -Path $env:TEMP -ChildPath "DCU_Extract_${UniqueID}"
+      New-Item -Path $ExtractPath -ItemType Directory -Force | Out-Null
+      
+      Write-Log "Installing from: $Installer"
       $InstallProcess = Start-Process -Wait -NoNewWindow -FilePath $Installer -ArgumentList $InstallArgs -PassThru
+      
       Write-Log "Installer exit code: $($InstallProcess.ExitCode)"
       
       if (Test-Path $LogFile) {
-        $LogTail = Get-Content $LogFile -Tail 10 -ErrorAction SilentlyContinue
-        if ($LogTail) {
-          Write-Log "Installer log (last 10 lines):"
-          $LogTail | ForEach-Object { Write-Log $_ }
+        $LogContent = Get-Content $LogFile -ErrorAction SilentlyContinue
+        $ErrorLines = $LogContent | Select-String -Pattern 'error|failure|1602' -Context 0,2
+        if ($ErrorLines) {
+          Write-Log "Installer errors found:"
+          $ErrorLines | ForEach-Object { Write-Log $_.Line }
         }
       }
       
-      switch ($InstallProcess.ExitCode) {
-        0 { Write-Log "Installation completed successfully" }
-        1 { Write-Log "Installation completed (reboot required)" -Level 'WARNING' }
-        4 { 
-          Write-Log "Installation failed - exit code 4 (prerequisites not met)" -Level 'ERROR'
-          if (-not (Test-DotNetVersion)) {
-            throw ".NET 8 Desktop Runtime is required but not detected"
+      if ($InstallProcess.ExitCode -eq 0 -or $InstallProcess.ExitCode -eq 1) {
+        Write-Log "Installation completed (exit code: $($InstallProcess.ExitCode))"
+      }
+      elseif ($InstallProcess.ExitCode -eq 4) {
+        # Check the actual error in the log
+        if (Test-Path $LogFile) {
+          $LogContent = Get-Content $LogFile -Raw
+          if ($LogContent -match '1602') {
+            throw "Installation cancelled or blocked by another process. Please close Dell applications and retry."
           }
-          throw "Installation prerequisites check failed"
-        }
-        default { 
-          if ($InstallProcess.ExitCode -ne 0) {
-            throw "Installation failed with exit code: $($InstallProcess.ExitCode)"
+          if ($LogContent -match 'being used by another process') {
+            throw "File locking issue detected. Please reboot the system and retry."
           }
         }
+        throw "Installation prerequisites not met (exit code 4)"
+      }
+      else {
+        throw "Installation failed with exit code: $($InstallProcess.ExitCode)"
       }
 
-      Start-Sleep -Seconds 10
+      Start-Sleep -Seconds 15
 
       $InstalledApp = Get-InstalledApps -DisplayName 'Dell Command | Update'
       $NewVersion = $InstalledApp.DisplayVersion
       if ($NewVersion -is [array]) { $NewVersion = $NewVersion[0] }
       
       if ([string]::IsNullOrEmpty($NewVersion)) {
-        throw "Dell Command Update not detected after installation"
+        throw "DCU not detected after installation"
       }
       
-      Write-Log "Successfully installed Dell Command Update [$NewVersion]"
+      Write-Log "Successfully installed DCU v$NewVersion"
+      
+      # Cleanup
       Remove-Item $Installer -Force -ErrorAction SilentlyContinue
+      Remove-Item $ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
     }
     catch {
-      Write-Log "Failed to install Dell Command Update: $($_.Exception.Message)" -Level 'ERROR'
+      Write-Log "Installation failed: $($_.Exception.Message)" -Level 'ERROR'
       Remove-Item $Installer -Force -ErrorAction SilentlyContinue
       exit 1
     }
   }
   else { 
-    Write-Log "Dell Command Update installation not needed"
+    Write-Log "DCU installation not needed"
   }
 }
 
 function Invoke-DellCommandUpdate {
   $DCUPaths = @(
-    "$env:SystemDrive\Program Files\Dell\CommandUpdate\dcu-cli.exe",
-    "$env:SystemDrive\Program Files (x86)\Dell\CommandUpdate\dcu-cli.exe"
+    "$env:ProgramFiles\Dell\CommandUpdate\dcu-cli.exe",
+    "${env:ProgramFiles(x86)}\Dell\CommandUpdate\dcu-cli.exe"
   )
   
-  $DCU = $null
-  foreach ($Path in $DCUPaths) {
-    if (Test-Path $Path) {
-      $DCU = $Path
-      break
-    }
-  }
+  $DCU = $DCUPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
   
-  if ($null -eq $DCU) {
-    Write-Log 'Dell Command Update CLI not found' -Level 'ERROR'
+  if (-not $DCU) {
+    Write-Log 'DCU CLI not found' -Level 'ERROR'
     exit 1
   }
   
-  Write-Log "Found DCU CLI at: $DCU"
+  Write-Log "DCU CLI: $DCU"
   
   try {
     Write-Log 'Configuring DCU...'
     $ConfigProcess = Start-Process -NoNewWindow -Wait -FilePath $DCU -ArgumentList '/configure -scheduleAction=DownloadInstallAndNotify -updatesNotification=disable -forceRestart=disable -scheduleAuto -silent' -PassThru
-    Write-Log "Configuration exit code: $($ConfigProcess.ExitCode)"
+    Write-Log "Config: $($ConfigProcess.ExitCode)"
     
     Write-Log 'Scanning for updates...'
     $ScanProcess = Start-Process -NoNewWindow -Wait -FilePath $DCU -ArgumentList '/scan -silent' -PassThru
-    Write-Log "Scan exit code: $($ScanProcess.ExitCode)"
+    Write-Log "Scan: $($ScanProcess.ExitCode)"
     
     Write-Log 'Applying updates...'
     $UpdateProcess = Start-Process -NoNewWindow -Wait -FilePath $DCU -ArgumentList '/applyUpdates -autoSuspendBitLocker=enable -reboot=disable' -PassThru
-    Write-Log "Apply updates exit code: $($UpdateProcess.ExitCode)"
+    Write-Log "Apply: $($UpdateProcess.ExitCode)"
     
     if ($UpdateProcess.ExitCode -eq 0 -or $UpdateProcess.ExitCode -eq 500) {
-      Write-Log 'Dell updates completed successfully'
+      Write-Log 'Updates completed successfully'
     }
     elseif ($UpdateProcess.ExitCode -eq 1) {
-      Write-Log 'Dell updates applied - reboot required' -Level 'WARNING'
-    }
-    else {
-      Write-Log "DCU exit code: $($UpdateProcess.ExitCode)" -Level 'WARNING'
+      Write-Log 'Updates applied - reboot required' -Level 'WARNING'
     }
   }
   catch {
@@ -361,6 +346,7 @@ function Invoke-DellCommandUpdate {
   }
 }
 
+# Main execution
 Set-Location -Path $env:SystemRoot
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
@@ -369,13 +355,10 @@ if ([Net.ServicePointManager]::SecurityProtocol -notcontains 'Tls12' -and [Net.S
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 }
 
-Write-Log "===== Dell Command Update Script Started ====="
-Write-Log "Running as: $env:USERNAME"
-Write-Log "Computer: $env:COMPUTERNAME"
+Write-Log "===== Dell Command Update Script v1.4.0 ====="
+Write-Log "User: $env:USERNAME | Computer: $env:COMPUTERNAME"
 
 $Manufacturer = (Get-CimInstance -ClassName Win32_BIOS).Manufacturer
-Write-Log "Manufacturer: $Manufacturer"
-
 if ($Manufacturer -notlike '*Dell*') {
   Write-Log "Not a Dell system - exiting"
   exit 0
