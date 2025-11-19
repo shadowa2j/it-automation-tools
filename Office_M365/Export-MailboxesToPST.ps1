@@ -15,10 +15,25 @@
     - eDiscovery Manager role or Compliance Administrator role
     - Security & Compliance PowerShell connection
     
-    Confidence Level: 95%
+    Author: Bryan
+    Created: 2025-11-19
+    Version: 1.0.0
+    
+    Version History:
+    1.0.0 - 2025-11-19
+        - Initial release
+        - Creates compliance searches for specified mailboxes
+        - Monitors search completion
+        - Provides direct links to Purview compliance portal for manual export
+        - Handles authentication for regular PowerShell and PowerShell ISE
+        - Saves search results to text file for reference
+        - Adapted for post-May 2025 Microsoft eDiscovery changes
 
 .EXAMPLE
     .\Export-MailboxesToPST.ps1
+    
+    Creates compliance searches for all users specified in $UsersToExport,
+    monitors completion, and provides export links.
 #>
 
 #Requires -Modules ExchangeOnlineManagement
