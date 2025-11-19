@@ -45,13 +45,23 @@ $SearchPrefix = "MailboxExport"
 
 # Connect to Security & Compliance PowerShell
 Write-Host "Connecting to Security & Compliance Center..." -ForegroundColor Cyan
+Write-Host "Note: You may need to authenticate in your browser or use a device code." -ForegroundColor Gray
 try {
-    Connect-IPPSSession -ErrorAction Stop
+    # Try with UseRPSSession first (more compatible)
+    Connect-IPPSSession -UseRPSSession -ErrorAction Stop
     Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
 } catch {
-    Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
-    Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
-    exit 1
+    # If that fails, try device code authentication
+    Write-Host "Initial connection failed. Trying device code authentication..." -ForegroundColor Yellow
+    try {
+        Connect-IPPSSession -Device -ErrorAction Stop
+        Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
+        Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
+        Write-Host "Try running from a non-elevated PowerShell window." -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 # Results tracking
