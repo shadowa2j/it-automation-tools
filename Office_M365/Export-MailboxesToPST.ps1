@@ -76,13 +76,16 @@ if ($psISE) {
 } else {
     Write-Host "Note: You may need to authenticate in your browser." -ForegroundColor Gray
     try {
-        # Use UseRPSSession for compatibility
-        Connect-IPPSSession -UseRPSSession -ErrorAction Stop
+        # Try direct connection first (modern auth)
+        Connect-IPPSSession -ErrorAction Stop
         Write-Host "Successfully connected to Security & Compliance Center" -ForegroundColor Green
     } catch {
         Write-Host "Failed to connect to Security & Compliance Center: $_" -ForegroundColor Red
         Write-Host "Please ensure you have the ExchangeOnlineManagement module installed and proper permissions." -ForegroundColor Yellow
-        Write-Host "If authentication keeps failing, try updating the module: Update-Module ExchangeOnlineManagement" -ForegroundColor Yellow
+        Write-Host "If authentication keeps failing, try:" -ForegroundColor Yellow
+        Write-Host "  1. Update the module: Update-Module ExchangeOnlineManagement -Force" -ForegroundColor Gray
+        Write-Host "  2. Run from a non-elevated PowerShell window" -ForegroundColor Gray
+        Write-Host "  3. Check if you have eDiscovery Manager permissions" -ForegroundColor Gray
         exit 1
     }
 }
