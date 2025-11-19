@@ -252,7 +252,7 @@ Write-Host "2. Select multiple searches using the checkboxes" -ForegroundColor W
 Write-Host "3. Click 'Actions' > 'Export results' to batch export" -ForegroundColor White
 
 # Save search details to file for reference
-$OutputFile = "MailboxExportSearches_$Timestamp.txt"
+$OutputFile = "C:\temp\MailboxExportSearches_$Timestamp.txt"
 $OutputPath = Join-Path $PSScriptRoot $OutputFile
 
 $OutputContent = @"
