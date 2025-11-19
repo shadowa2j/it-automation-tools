@@ -11,7 +11,7 @@
     Original Author: Aaron J. Stevenson
     Modified by: Bryan (Quality Computer Solutions)
     Modifications: Enhanced error handling, NinjaRMM compatibility, OS-specific installer selection
-    Version: 1.1.0
+    Version: 1.2.0
 #>
 
 function Write-Log {
@@ -123,35 +123,34 @@ function Install-DellCommandUpdate {
     
     $Arch = Get-Architecture
     
-    # Set installer based on OS version
-    # Exit code 4 typically means "Universal Application" won't work on this OS
-    # Use the standard Application version for Windows 10
+    # Use current working URLs from Chocolatey package
+    # Source: https://community.chocolatey.org/packages/dellcommandupdate
     if ($Arch -like 'arm*') { 
-      $FallbackDownloadURL = 'https://dl.dell.com/FOLDER11914141M/1/Dell-Command-Update-Windows-Universal-Application_6MK0D_WINARM64_5.4.0_A00.EXE'
-      $FallbackMD5 = 'c6ed3bc35d7d6d726821a2c25fbbb44d'
-      $FallbackVersion = '5.4.0'
+      # ARM64 - Universal Application
+      $DownloadURL = 'https://dl.dell.com/FOLDER13309588M/3/Dell-Command-Update-Windows-Universal-Application_C8JXV_WIN64_5.5.0_A00_02.EXE'
+      $MD5 = 'skip'
+      $Version = '5.5.0'
       Write-Log "Selected ARM64 Universal Application installer"
     }
     elseif ($IsWindows10) {
-      # For Windows 10, use the standard Application version (not Universal)
-      $FallbackDownloadURL = 'https://dl.dell.com/FOLDER11959969M/1/Dell-Command-Update-Application_G66CT_WIN_5.0.0_A00.EXE'
-      $FallbackMD5 = 'skip'  # We'll skip MD5 check for this fallback
-      $FallbackVersion = '5.0.0'
+      # Windows 10 - Standard Application (not Universal)
+      $DownloadURL = 'https://dl.dell.com/FOLDER13309509M/1/Dell-Command-Update-Application_PPWHH_WIN64_5.5.0_A00.EXE'
+      $MD5 = 'skip'
+      $Version = '5.5.0'
       Write-Log "Selected Windows 10 Application installer (non-Universal)"
     }
     else { 
-      # Windows 11 - use Universal Application
-      $FallbackDownloadURL = 'https://dl.dell.com/FOLDER12925773M/1/Dell-Command-Update-Windows-Universal-Application_P4DJW_WIN64_5.5.0_A00.EXE'
-      $FallbackMD5 = 'a1eb9c7eadb6d9cbfbbe2be13049b299'
-      $FallbackVersion = '5.5.0'
-      Write-Log "Selected Windows 11 Universal Application installer"
+      # Windows 11 - Standard Application works better than Universal
+      $DownloadURL = 'https://dl.dell.com/FOLDER13309509M/1/Dell-Command-Update-Application_PPWHH_WIN64_5.5.0_A00.EXE'
+      $MD5 = 'skip'
+      $Version = '5.5.0'
+      Write-Log "Selected Windows 11 Application installer"
     }
   
-    # Return fallback version (skip website parsing for now to simplify)
     return @{
-      MD5     = $FallbackMD5.ToUpper()
-      URL     = $FallbackDownloadURL
-      Version = $FallbackVersion
+      MD5     = $MD5.ToUpper()
+      URL     = $DownloadURL
+      Version = $Version
     }
   }
   
@@ -183,7 +182,18 @@ function Install-DellCommandUpdate {
       # Download installer
       Write-Log "Dell Command Update installation needed"
       Write-Log "Downloading from: $($LatestDellCommandUpdate.URL)"
-      Invoke-WebRequest -Uri $LatestDellCommandUpdate.URL -OutFile $Installer -UserAgent ([Microsoft.PowerShell.Commands.PSUserAgent]::Chrome) -TimeoutSec 300 -ErrorAction Stop
+      
+      # Use custom user agent like Chocolatey does (Dell checks user agents)
+      $UserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+      Invoke-WebRequest -Uri $LatestDellCommandUpdate.URL -OutFile $Installer -UserAgent $UserAgent -TimeoutSec 300 -ErrorAction Stop
+
+      # Verify file was downloaded
+      if (-not (Test-Path $Installer)) {
+        throw "Installer file was not downloaded successfully"
+      }
+      
+      $FileSize = (Get-Item $Installer).Length / 1MB
+      Write-Log "Downloaded installer: $([math]::Round($FileSize, 2)) MB"
 
       # Verify MD5 checksum (skip if marked to skip)
       if ($LatestDellCommandUpdate.MD5 -ne 'SKIP') {
@@ -202,7 +212,7 @@ function Install-DellCommandUpdate {
       Write-Log 'Installing Dell Command Update...'
       Write-Log "Installer path: $Installer"
       
-      # Try silent install first
+      # Try silent install
       $InstallProcess = Start-Process -Wait -NoNewWindow -FilePath $Installer -ArgumentList '/s' -PassThru
       
       Write-Log "Installer exit code: $($InstallProcess.ExitCode)"
@@ -215,8 +225,8 @@ function Install-DellCommandUpdate {
         3 { Write-Log "Installation failed - insufficient privileges" -Level 'ERROR'; throw "Insufficient privileges" }
         4 { 
           Write-Log "Installation failed - unsupported OS or missing prerequisites (exit code 4)" -Level 'ERROR'
-          Write-Log "This may indicate the Universal Application won't work on this system" -Level 'ERROR'
           Write-Log "OS Build: $([System.Environment]::OSVersion.Version.Build)" -Level 'ERROR'
+          Write-Log "This may require .NET 8 Desktop Runtime" -Level 'ERROR'
           throw "Unsupported OS or missing prerequisites"
         }
         default { 
@@ -253,18 +263,55 @@ function Install-DellCommandUpdate {
 }
 
 function Install-DotNetDesktopRuntime {
-  # Simplified - just check if it exists, don't try to upgrade
+  # Check if .NET 8 Desktop Runtime is installed (required for DCU 5.5+)
   $InstalledApp = Get-InstalledApps -DisplayName 'Microsoft Windows Desktop Runtime'
   $CurrentVersion = $InstalledApp.BundleVersion
   if ($CurrentVersion -is [array]) { $CurrentVersion = $CurrentVersion[0] }
   
   Write-Log "Installed .NET Desktop Runtime: $CurrentVersion"
   
-  if ([string]::IsNullOrEmpty($CurrentVersion)) {
-    Write-Log ".NET Desktop Runtime not found - DCU installer will handle this" -Level 'WARNING'
+  # Check if we have .NET 8 or higher
+  $HasDotNet8 = $false
+  if (-not [string]::IsNullOrEmpty($CurrentVersion)) {
+    try {
+      $VersionObj = [version]$CurrentVersion
+      if ($VersionObj.Major -ge 8) {
+        $HasDotNet8 = $true
+        Write-Log ".NET 8+ Desktop Runtime is installed"
+      }
+    }
+    catch {
+      Write-Log "Could not parse .NET version" -Level 'WARNING'
+    }
   }
-  else {
-    Write-Log ".NET Desktop Runtime is installed"
+  
+  if (-not $HasDotNet8) {
+    Write-Log ".NET 8 Desktop Runtime not found - DCU 5.5 requires this" -Level 'WARNING'
+    Write-Log "Attempting to install .NET 8 Desktop Runtime..." -Level 'WARNING'
+    
+    try {
+      $Arch = Get-Architecture
+      $DotNetUrl = "https://download.visualstudio.microsoft.com/download/pr/d6cd4de9-bb6f-4056-bc6c-4ba4c4c11c85/bd2db1af3db61b0e6a0302db21ff3a44/windowsdesktop-runtime-8.0.11-win-$Arch.exe"
+      $DotNetInstaller = Join-Path -Path $env:TEMP -ChildPath "windowsdesktop-runtime-8.0.11-win-$Arch.exe"
+      
+      Write-Log "Downloading .NET 8 Desktop Runtime..."
+      Invoke-WebRequest -Uri $DotNetUrl -OutFile $DotNetInstaller -TimeoutSec 300 -ErrorAction Stop
+      
+      Write-Log "Installing .NET 8 Desktop Runtime..."
+      $InstallProcess = Start-Process -Wait -NoNewWindow -FilePath $DotNetInstaller -ArgumentList '/install /quiet /norestart' -PassThru
+      
+      if ($InstallProcess.ExitCode -eq 0 -or $InstallProcess.ExitCode -eq 3010) {
+        Write-Log ".NET 8 Desktop Runtime installed successfully"
+        Remove-Item $DotNetInstaller -Force -ErrorAction SilentlyContinue
+      }
+      else {
+        throw ".NET installation failed with exit code: $($InstallProcess.ExitCode)"
+      }
+    }
+    catch {
+      Write-Log "Failed to install .NET 8 Desktop Runtime: $($_.Exception.Message)" -Level 'WARNING'
+      Write-Log "DCU installation may fail without .NET 8" -Level 'WARNING'
+    }
   }
 }
 
