@@ -8,13 +8,13 @@ $TrackingFieldName = "CFUMOSRewstTrackingNumber"
 # Get webhook data from Rewst context
 $webhookData = $CTX.body
 
-# Extract ticket information
-$ticketId = $webhookData.id
-$ticketSummary = $webhookData.summary
+# Extract ticket information - ticket data is nested under body.ticket
+$ticketId = $webhookData.ticket.id
+$ticketSummary = $webhookData.ticket.summary
 
-# Find the tracking number in custom fields
+# Find the tracking number in custom fields - customfields is under ticket, not root
 $trackingNumber = $null
-foreach ($field in $webhookData.customfields) {
+foreach ($field in $webhookData.ticket.customfields) {
     if ($field.name -eq $TrackingFieldName) {
         $trackingNumber = $field.value
         break
