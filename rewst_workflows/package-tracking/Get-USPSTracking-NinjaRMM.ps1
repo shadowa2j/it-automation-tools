@@ -41,24 +41,63 @@ try {
     $edgeVersion = (Get-Item $edgePath).VersionInfo.ProductVersion
     $edgeMajorVersion = $edgeVersion.Split('.')[0]
 
-    # Download matching Edge WebDriver if not present
-    $driverPath = "$env:TEMP\edgedriver"
-    $driverExe = "$driverPath\msedgedriver.exe"
+    # Check for Edge WebDriver in multiple locations
+    $driverPath = $null
+    $driverExe = $null
     
-    if (-not (Test-Path $driverExe)) {
+    # Location 1: Pre-installed in C:\Tools\EdgeDriver
+    if (Test-Path "C:\Tools\EdgeDriver\msedgedriver.exe") {
+        $driverPath = "C:\Tools\EdgeDriver"
+        $driverExe = "$driverPath\msedgedriver.exe"
+    }
+    # Location 2: Pre-installed in C:\EdgeDriver
+    elseif (Test-Path "C:\EdgeDriver\msedgedriver.exe") {
+        $driverPath = "C:\EdgeDriver"
+        $driverExe = "$driverPath\msedgedriver.exe"
+    }
+    # Location 3: Already in TEMP
+    elseif (Test-Path "$env:TEMP\edgedriver\msedgedriver.exe") {
+        $driverPath = "$env:TEMP\edgedriver"
+        $driverExe = "$driverPath\msedgedriver.exe"
+    }
+    # Location 4: Try to download
+    else {
+        $driverPath = "$env:TEMP\edgedriver"
+        $driverExe = "$driverPath\msedgedriver.exe"
+        
         # Create driver directory
         New-Item -ItemType Directory -Path $driverPath -Force | Out-Null
         
-        # Download Edge WebDriver
-        $driverUrl = "https://msedgedriver.azureedge.net/$edgeVersion/edgedriver_win64.zip"
-        $driverZip = "$env:TEMP\edgedriver.zip"
-        
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $driverUrl -OutFile $driverZip -UseBasicParsing
         
-        # Extract driver
-        Expand-Archive -Path $driverZip -DestinationPath $driverPath -Force
-        Remove-Item $driverZip -Force
+        # Try multiple download sources
+        $downloadSuccess = $false
+        $driverUrls = @(
+            "https://msedgedriver.azureedge.net/$edgeVersion/edgedriver_win64.zip",
+            "https://msedgewebdriverstorage.blob.core.windows.net/edgewebdriver/$edgeVersion/edgedriver_win64.zip"
+        )
+        
+        foreach ($driverUrl in $driverUrls) {
+            try {
+                $driverZip = "$env:TEMP\edgedriver.zip"
+                Invoke-WebRequest -Uri $driverUrl -OutFile $driverZip -UseBasicParsing -TimeoutSec 30
+                Expand-Archive -Path $driverZip -DestinationPath $driverPath -Force
+                Remove-Item $driverZip -Force -ErrorAction SilentlyContinue
+                $downloadSuccess = $true
+                break
+            }
+            catch {
+                continue
+            }
+        }
+        
+        if (-not $downloadSuccess) {
+            throw "Could not download Edge WebDriver. Please manually install msedgedriver.exe to C:\Tools\EdgeDriver\"
+        }
+    }
+    
+    if (-not (Test-Path $driverExe)) {
+        throw "Edge WebDriver not found at $driverExe. Please manually install msedgedriver.exe to C:\Tools\EdgeDriver\"
     }
 
     # Install Selenium PowerShell module if needed
