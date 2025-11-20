@@ -1,90 +1,84 @@
-{#
-  Rewst Workflow: Skyward Student and Guardian Data Parser
-  
-  Purpose: Parses Skyward API responses to extract student information and 
-           primary guardian details with mailing address
-  
-  Author: Bryan Faulkner, with assistance from Claude
-  Version: 1.0.0
-  
-  Input Variables Required:
-  - CTX.input_first_name: Student's first name
-  - CTX.input_last_name: Student's last name
-  - CTX.all_students: Array of all students from Skyward API
-  - CTX.guardians_list: Array of all guardians from Skyward API
-  
-  Output: JSON object with student and primary_guardian data
-#}
-
 {% set target_first_name = CTX.input_first_name | lower | trim %}
 {% set target_last_name = CTX.input_last_name | lower | trim %}
 
-{# Find the matching student #}
+{# Find the matching student by first name and last name #}
 {% set found_student = namespace(value=none) %}
 {% for student in CTX.all_students %}
-  {% if student.FirstName | lower == target_first_name and student.LastName | lower == target_last_name %}
+  {% if student.FirstName | lower == target_first_name 
+     and student.LastName | lower == target_last_name %}
     {% set found_student.value = student %}
   {% endif %}
 {% endfor %}
 
-{# Find guardians for this student and collect with FamilyOrderNumber #}
+{# Find guardians for this student and collect with FamilyOrderNumber, GuardianOrderNumber, and IsCustodial #}
 {% set student_guardians = [] %}
-{% for guardian in CTX.guardians_list %}
-  {% for student_relation in guardian.Students %}
-    {% if student_relation.StudentNameId == found_student.value.NameId %}
-      {% set _ = student_guardians.append({
-        "guardian": guardian,
-        "family_order": student_relation.FamilyOrderNumber,
-        "guardian_order": student_relation.GuardianOrderNumber
-      }) %}
-    {% endif %}
+{% if found_student.value %}
+  {% for guardian in CTX.guardians_list %}
+    {% for student_relation in guardian.Students %}
+      {% if student_relation.StudentNameId == found_student.value.NameId %}
+        {% set _ = student_guardians.append({
+          "guardian": guardian,
+          "family_order": student_relation.FamilyOrderNumber,
+          "guardian_order": student_relation.GuardianOrderNumber,
+          "is_custodial": student_relation.IsCustodial
+        }) %}
+      {% endif %}
+    {% endfor %}
   {% endfor %}
-{% endfor %}
+{% endif %}
 
-{# Sort guardians by FamilyOrderNumber (primary family contact first) #}
-{% set sorted_guardians = student_guardians | sort(attribute='family_order') %}
+{# Sort guardians by: 1) FamilyOrderNumber, 2) IsCustodial (true first), 3) GuardianOrderNumber #}
+{# Note: Jinja sort is ascending, so we use negative values for IsCustodial to get true (1) before false (0) #}
+{% set sorted_guardians = student_guardians | sort(attribute='guardian_order') | sort(attribute='is_custodial', reverse=true) | sort(attribute='family_order') %}
 
-{# Use the guardian with FamilyOrderNumber = 1 (primary family contact) #}
+{# Use the first guardian after sorting (should be FamilyOrder 1, Custodial, lowest GuardianOrder) #}
 {% set primary_guardian = namespace(value=none) %}
-{% for guardian_info in sorted_guardians %}
-  {% if guardian_info.family_order == 1 %}
-    {% set primary_guardian.value = guardian_info.guardian %}
-  {% endif %}
-{% endfor %}
-
-{# If no FamilyOrderNumber 1, use the first one in the sorted list #}
-{% if primary_guardian.value is none and sorted_guardians | length > 0 %}
+{% if sorted_guardians | length > 0 %}
   {% set primary_guardian.value = sorted_guardians[0].guardian %}
 {% endif %}
 
-{# Determine which address to use - prefer mailing address, fallback to physical address #}
-{% set use_mailing = primary_guardian.value.MailStreetAddress and primary_guardian.value.MailStreetAddress != "" %}
+{# Build result only if we found both student and guardian #}
+{% if found_student.value and primary_guardian.value %}
+  {# Determine which address to use - prefer mailing address, fallback to physical address #}
+  {% set use_mailing = primary_guardian.value.MailStreetAddress and primary_guardian.value.MailStreetAddress != "" %}
 
-{
-  "success": true,
-  "student": {
-    "first_name": "{{ found_student.value.FirstName }}",
-    "last_name": "{{ found_student.value.LastName }}",
-    "graduation_year": {{ found_student.value.GradYr }},
-    "student_id": {{ found_student.value.NameId }},
-    "display_id": "{{ found_student.value.DisplayId }}",
-    "default_school_id": "{{ found_student.value.DefaultSchoolId }}"
-  },
-  "primary_guardian": {
-    "guardian_id": {{ primary_guardian.value.GuardianNameId }},
-    "first_name": "{{ primary_guardian.value.FirstName }}",
-    "last_name": "{{ primary_guardian.value.LastName }}",
-    "full_name": "{{ primary_guardian.value.DisplayNameFML }}",
-    "email": "{{ primary_guardian.value.Email if primary_guardian.value.Email else '' }}",
-    "phone_number": "{{ primary_guardian.value.PhoneNumber if primary_guardian.value.PhoneNumber else '' }}",
-    "mailing_address": {
-      "street": "{{ primary_guardian.value.MailStreetAddress if use_mailing else primary_guardian.value.StreetAddress }}",
-      "city": "{{ primary_guardian.value.MailCity if use_mailing else primary_guardian.value.City }}",
-      "state": "{{ primary_guardian.value.MailState if use_mailing else primary_guardian.value.State }}",
-      "zip_code": "{{ primary_guardian.value.MailZipCode if use_mailing else primary_guardian.value.ZipCode }}",
-      "full_address": "{{ primary_guardian.value.MailOneLineAddress if use_mailing else primary_guardian.value.OneLineAddress }}",
-      "address_type": "{{ 'mailing' if use_mailing else 'physical' }}"
+  {% set result = {
+    "success": true,
+    "student": {
+      "first_name": found_student.value.FirstName.replace(' ', '.'),
+      "last_name": found_student.value.LastName.replace(' ', '.'),
+      "graduation_year": found_student.value.GradYr,
+      "student_id": found_student.value.NameId,
+      "display_id": found_student.value.DisplayId,
+      "default_school_id": found_student.value.DefaultSchoolId
+    },
+    "primary_guardian": {
+      "guardian_id": primary_guardian.value.GuardianNameId,
+      "first_name": primary_guardian.value.FirstName.replace(' ', '-'),
+      "last_name": primary_guardian.value.LastName.replace(' ', '-'),
+      "full_name": primary_guardian.value.DisplayNameFML,
+      "email": primary_guardian.value.Email if primary_guardian.value.Email else '',
+      "phone_number": primary_guardian.value.PhoneNumber if primary_guardian.value.PhoneNumber else '',
+      "mailing_address": {
+        "street": primary_guardian.value.MailStreetAddress if use_mailing else primary_guardian.value.StreetAddress,
+        "city": primary_guardian.value.MailCity if use_mailing else primary_guardian.value.City,
+        "state": primary_guardian.value.MailState if use_mailing else primary_guardian.value.State,
+        "zip_code": primary_guardian.value.MailZipCode if use_mailing else primary_guardian.value.ZipCode,
+        "full_address": primary_guardian.value.MailOneLineAddress if use_mailing else primary_guardian.value.OneLineAddress,
+        "address_type": 'mailing' if use_mailing else 'physical'
+      }
+    },
+    "retrieved_at": now()
+  } %}
+  {{ result | tojson }}
+{% else %}
+  {% set error_result = {
+    "success": false,
+    "error": "Student or guardian not found",
+    "searched_for": {
+      "first_name": target_first_name,
+      "last_name": target_last_name
     }
-  },
-  "retrieved_at": "{{ now() }}"
-}
+  } %}
+  {{ error_result | tojson }}
+{% endif %}
