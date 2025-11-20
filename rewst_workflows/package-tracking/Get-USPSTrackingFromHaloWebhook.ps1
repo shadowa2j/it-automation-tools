@@ -12,10 +12,10 @@ $webhookData = $CTX.body
 $ticketId = $webhookData.ticket.id
 $ticketSummary = $webhookData.ticket.summary
 
-# Find the tracking number in custom fields - customfields is under ticket, not root
+# Find the tracking number in custom fields by ID (398 = CFUMOSRewstTrackingNumber)
 $trackingNumber = $null
 foreach ($field in $webhookData.ticket.customfields) {
-    if ($field.name -eq $TrackingFieldName) {
+    if ($field.id -eq 398) {
         $trackingNumber = $field.value
         break
     }
