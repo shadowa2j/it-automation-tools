@@ -15,7 +15,7 @@
     
 .NOTES
     Author: Bryan
-    Version: 1.2
+    Version: 1.3
     Date: 2025-11-20
     
     IMPORTANT: 
@@ -82,9 +82,8 @@ function Get-USPSTrackingInfo {
             $html -match '"trackingEvents"\s*:\s*\[(.+?)\]') {
             try {
                 $jsonMatch = $matches[1]
-                Write-Verbose "Found embedded JSON data"
             } catch {
-                Write-Verbose "JSON extraction failed, falling back to HTML parsing"
+                # JSON extraction failed, continue to HTML parsing
             }
         }
         
@@ -185,8 +184,6 @@ function Get-USPSTrackingInfo {
 
 # Main execution
 try {
-    Write-Verbose "Parsing Halo webhook JSON..."
-    
     # Parse the webhook JSON
     $webhookData = $WebhookJSON | ConvertFrom-Json
     
@@ -194,14 +191,11 @@ try {
     $ticketId = $webhookData.id
     $ticketSummary = $webhookData.summary
     
-    Write-Verbose "Processing ticket #$ticketId : $ticketSummary"
-    
     # Find the tracking number in custom fields
     $trackingNumber = $null
     foreach ($field in $webhookData.customfields) {
         if ($field.name -eq $TrackingFieldName) {
             $trackingNumber = $field.value
-            Write-Verbose "Found tracking number: $trackingNumber"
             break
         }
     }
@@ -216,7 +210,8 @@ try {
             checked_at = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
         }
         
-        Write-Output ($errorResult | ConvertTo-Json -Depth 10)
+        # Output ONLY JSON - no other text
+        $errorResult | ConvertTo-Json -Depth 10 -Compress
         exit 1
     }
     
@@ -230,11 +225,10 @@ try {
             checked_at = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
         }
         
-        Write-Output ($errorResult | ConvertTo-Json -Depth 10)
+        # Output ONLY JSON - no other text
+        $errorResult | ConvertTo-Json -Depth 10 -Compress
         exit 1
     }
-    
-    Write-Verbose "Fetching USPS tracking information for: $trackingNumber"
     
     # Get tracking information
     $trackingInfo = Get-USPSTrackingInfo -TrackingNumber $trackingNumber
@@ -242,9 +236,8 @@ try {
     # Add ticket ID to the result for Rewst to use when updating Halo
     $trackingInfo.ticket_id = $ticketId
     
-    # Convert to JSON and output
-    $jsonOutput = $trackingInfo | ConvertTo-Json -Depth 10
-    Write-Output $jsonOutput
+    # Output ONLY JSON - no other text
+    $trackingInfo | ConvertTo-Json -Depth 10 -Compress
     
     # Exit with appropriate code
     if ($trackingInfo.success) {
@@ -263,6 +256,7 @@ try {
         checked_at = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
     }
     
-    Write-Output ($errorResult | ConvertTo-Json -Depth 10)
+    # Output ONLY JSON - no other text
+    $errorResult | ConvertTo-Json -Depth 10 -Compress
     exit 1
 }
