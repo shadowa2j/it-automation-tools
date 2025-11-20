@@ -3,42 +3,36 @@
     USPS Tracking Scraper for Halo Webhook Integration
     
 .DESCRIPTION
-    Extracts tracking number from Halo webhook JSON and scrapes USPS tracking information.
+    Extracts tracking number from Halo webhook JSON (from Rewst CTX.body) and scrapes USPS tracking information.
     Returns structured JSON for Rewst to process and update back to Halo.
-    
-.PARAMETER WebhookJSON
-    JSON string from Halo webhook containing ticket data
     
 .PARAMETER TrackingFieldName
     Name of the custom field containing the tracking number (default: CFUMOSRewstTrackingNumber)
     
 .EXAMPLE
-    $webhookData = Get-Content webhook.json -Raw
-    .\Get-USPSTrackingFromHaloWebhook.ps1 -WebhookJSON $webhookData
-    
-.EXAMPLE
-    # In Rewst workflow
-    .\Get-USPSTrackingFromHaloWebhook.ps1 -WebhookJSON '{{ CTX.webhook_body }}'
+    # In Rewst workflow - script automatically uses {{ CTX.body }}
+    .\Get-USPSTrackingFromHaloWebhook.ps1
     
 .NOTES
     Author: Bryan
-    Version: 1.1
+    Version: 1.2
     Date: 2025-11-20
     
     IMPORTANT: 
-    - This script extracts tracking number from Halo webhook custom field
+    - This script is designed to run in Rewst workflows
+    - It automatically reads the Halo webhook from {{ CTX.body }}
     - Scrapes public USPS website (not their API)
     - Returns JSON that Rewst can use to update Halo ticket
 #>
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)]
-    [string]$WebhookJSON,
-    
     [Parameter(Mandatory=$false)]
     [string]$TrackingFieldName = "CFUMOSRewstTrackingNumber"
 )
+
+# Get webhook JSON from Rewst context - this will be replaced by Rewst at runtime
+$WebhookJSON = '{{ CTX.body }}'
 
 function Get-USPSTrackingInfo {
     <#
