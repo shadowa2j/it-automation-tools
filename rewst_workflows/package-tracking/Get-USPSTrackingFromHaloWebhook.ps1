@@ -107,7 +107,9 @@ else {
             $result.success = $true
         }
         else {
-            $result.error_message = "Could not parse tracking status from page"
+            # Capture first 500 chars of HTML to debug what USPS returned
+            $htmlSnippet = $html.Substring(0, [Math]::Min(500, $html.Length))
+            $result.error_message = "Could not parse tracking status. HTML preview: $htmlSnippet"
         }
         
         # Extract delivery date
