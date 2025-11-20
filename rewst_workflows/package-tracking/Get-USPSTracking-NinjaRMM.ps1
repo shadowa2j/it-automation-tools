@@ -73,27 +73,39 @@ try {
             throw "WebDriver not responding on port $driverPort. Error: $($_.Exception.Message)"
         }
         
-        # Create a new session - simpler capability format
-        $capabilities = @{
-            capabilities = @{
-                alwaysMatch = @{
-                    browserName = "MicrosoftEdge"
-                    "ms:edgeOptions" = @{
-                        args = @("--headless", "--disable-gpu", "--no-sandbox")
-                    }
+        # Create a new session - try W3C format
+        $capJson = '{"capabilities":{"alwaysMatch":{"browserName":"MicrosoftEdge","ms:edgeOptions":{"args":["--headless","--disable-gpu"]}}}}'
+        
+        $PS_Results.debug_info += " | Sending capabilities"
+        
+        $sessionResponse = $null
+        $lastError = $null
+        
+        # Try different capability formats
+        $capFormats = @(
+            '{"capabilities":{"alwaysMatch":{"browserName":"MicrosoftEdge","ms:edgeOptions":{"args":["--headless","--disable-gpu"]}}}}',
+            '{"capabilities":{"alwaysMatch":{"ms:edgeOptions":{"args":["--headless"]}}}}',
+            '{"desiredCapabilities":{"browserName":"MicrosoftEdge","ms:edgeOptions":{"args":["--headless"]}}}',
+            '{"capabilities":{}}'
+        )
+        
+        foreach ($capFormat in $capFormats) {
+            try {
+                $sessionResponse = Invoke-RestMethod -Uri "$baseUrl/session" -Method Post -Body $capFormat -ContentType "application/json" -TimeoutSec 30
+                if ($sessionResponse.value.sessionId) {
+                    $PS_Results.debug_info += " | Session created with format"
+                    break
                 }
+            }
+            catch {
+                $lastError = $_.Exception.Message
+                $errBody = $_.ErrorDetails.Message
+                continue
             }
         }
         
-        $capJson = $capabilities | ConvertTo-Json -Depth 10 -Compress
-        $PS_Results.debug_info += " | Sending capabilities"
-        
-        try {
-            $sessionResponse = Invoke-RestMethod -Uri "$baseUrl/session" -Method Post -Body $capJson -ContentType "application/json; charset=utf-8" -TimeoutSec 30
-        }
-        catch {
-            $errDetails = $_.ErrorDetails.Message
-            throw "Failed to create session: $($_.Exception.Message). Details: $errDetails"
+        if (-not $sessionResponse -or -not $sessionResponse.value.sessionId) {
+            throw "Failed to create session after trying all formats. Last error: $lastError. Details: $errBody"
         }
         
         $sessionId = $sessionResponse.value.sessionId
