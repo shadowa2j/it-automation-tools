@@ -6,7 +6,7 @@
     This script checks if OneDrive is installed and signed into a business account with KFM enabled.
     If not configured properly, it will:
     1. Install OneDrive if missing (via winget, fallback to Microsoft CDN)
-    2. Auto-discover the Azure AD tenant ID from the device join info
+    2. Auto-discover the Azure AD tenant ID from the device join info (or use manually provided TenantId)
     3. Configure silent SSO sign-in via registry
     4. Enable KFM for Desktop, Documents, and Pictures folders
     5. Prevent users from disabling KFM
@@ -14,10 +14,26 @@
     Designed for NinjaRMM deployment, running as the logged-in user context.
     Safe to run multiple times (idempotent).
 
+.PARAMETER TenantId
+    Optional. Azure AD Tenant ID (GUID format). If not provided, the script will
+    attempt to auto-discover from device join info, dsregcmd, or registry.
+    Use this for:
+    - Pre-staging machines before any user has signed in
+    - Devices that aren't hybrid Azure AD joined
+    - When auto-discovery fails
+
+.EXAMPLE
+    .\Setup-OneDriveBusinessKFM.ps1
+    Auto-discovers tenant ID from device.
+
+.EXAMPLE
+    .\Setup-OneDriveBusinessKFM.ps1 -TenantId "b71226e9-ed4b-4f10-88f9-44382dff3cbc"
+    Uses the manually specified tenant ID.
+
 .NOTES
     Author: Bryan Faulkner, with assistance from Claude
-    Version: 1.0.0
-    Requires: Windows 10/11, Azure AD Hybrid Joined device
+    Version: 1.3.0
+    Requires: Windows 10/11, Azure AD Hybrid Joined device (or manual TenantId)
     Run As: Logged-in user (via NinjaRMM "Run As Logged In User")
 
 .OUTPUTS
@@ -27,6 +43,17 @@
 #>
 
 #Requires -Version 5.1
+
+param(
+    [Parameter(Mandatory = $false)]
+    [ValidatePattern('^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$')]
+    [string]$TenantId
+)
+
+# Also check for NinjaRMM environment variable (script variables in Ninja)
+if ([string]::IsNullOrWhiteSpace($TenantId) -and $env:TenantId) {
+    $TenantId = $env:TenantId
+}
 
 # ============================================================================
 # CONFIGURATION
@@ -89,35 +116,78 @@ function Get-AzureTenantId {
     if (Test-Path $joinInfoPath) {
         $guids = Get-ChildItem $joinInfoPath -ErrorAction SilentlyContinue
         foreach ($guid in $guids) {
-            $tenantId = Get-ItemProperty -Path $guid.PSPath -Name "TenantId" -ErrorAction SilentlyContinue
-            if ($tenantId.TenantId) {
-                Write-Log "Tenant ID found via CloudDomainJoin: $($tenantId.TenantId)" -Level "INFO"
-                return $tenantId.TenantId
+            $tenantIdValue = Get-ItemProperty -Path $guid.PSPath -Name "TenantId" -ErrorAction SilentlyContinue
+            if ($tenantIdValue.TenantId) {
+                Write-Log "Tenant ID found via CloudDomainJoin: $($tenantIdValue.TenantId)" -Level "INFO"
+                return $tenantIdValue.TenantId
             }
         }
     }
     
-    # Method 2: Parse dsregcmd output
+    # Method 2: Parse dsregcmd output for TenantId (Hybrid/Azure AD Joined)
     try {
         $dsregOutput = dsregcmd /status 2>&1 | Out-String
         if ($dsregOutput -match "TenantId\s*:\s*([a-f0-9\-]{36})") {
-            $tenantId = $matches[1]
-            Write-Log "Tenant ID found via dsregcmd: $tenantId" -Level "INFO"
-            return $tenantId
+            $tenantIdValue = $matches[1]
+            Write-Log "Tenant ID found via dsregcmd (TenantId): $tenantIdValue" -Level "INFO"
+            return $tenantIdValue
         }
     }
     catch {
         Write-Log "Failed to parse dsregcmd output: $_" -Level "WARN"
     }
     
-    # Method 3: Check AAD registry key
+    # Method 3: Parse dsregcmd output for WorkplaceTenantId (Workplace Joined / Azure AD Registered)
+    try {
+        $dsregOutput = dsregcmd /status 2>&1 | Out-String
+        if ($dsregOutput -match "WorkplaceTenantId\s*:\s*([a-f0-9\-]{36})") {
+            $tenantIdValue = $matches[1]
+            Write-Log "Tenant ID found via dsregcmd (WorkplaceTenantId): $tenantIdValue" -Level "INFO"
+            return $tenantIdValue
+        }
+    }
+    catch {
+        Write-Log "Failed to parse WorkplaceTenantId from dsregcmd: $_" -Level "WARN"
+    }
+    
+    # Method 4: Check AAD registry key
     $aadPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CDJ\AAD"
     if (Test-Path $aadPath) {
-        $tenantId = Get-ItemProperty -Path $aadPath -Name "TenantId" -ErrorAction SilentlyContinue
-        if ($tenantId.TenantId) {
-            Write-Log "Tenant ID found via CDJ\AAD: $($tenantId.TenantId)" -Level "INFO"
-            return $tenantId.TenantId
+        $tenantIdValue = Get-ItemProperty -Path $aadPath -Name "TenantId" -ErrorAction SilentlyContinue
+        if ($tenantIdValue.TenantId) {
+            Write-Log "Tenant ID found via CDJ\AAD: $($tenantIdValue.TenantId)" -Level "INFO"
+            return $tenantIdValue.TenantId
         }
+    }
+    
+    # Method 5: Check IdentityStore Cache for workplace joined accounts
+    $aadAccountsPath = "HKLM:\SOFTWARE\Microsoft\IdentityStore\Cache"
+    if (Test-Path $aadAccountsPath) {
+        $cacheKeys = Get-ChildItem $aadAccountsPath -Recurse -ErrorAction SilentlyContinue
+        foreach ($key in $cacheKeys) {
+            $tenantIdValue = Get-ItemProperty -Path $key.PSPath -Name "TenantId" -ErrorAction SilentlyContinue
+            if ($tenantIdValue.TenantId -and $tenantIdValue.TenantId -match "^[a-f0-9\-]{36}$") {
+                Write-Log "Tenant ID found via IdentityStore Cache: $($tenantIdValue.TenantId)" -Level "INFO"
+                return $tenantIdValue.TenantId
+            }
+        }
+    }
+    
+    # Method 6: Try via user's UPN and OpenID config (requires internet, user context)
+    try {
+        $upn = whoami /upn 2>&1
+        if ($upn -match "@" -and $upn -notmatch "error") {
+            $domain = $upn.Split("@")[1]
+            $openIdConfig = Invoke-RestMethod -Uri "https://login.windows.net/$domain/.well-known/openid-configuration" -ErrorAction Stop
+            $tenantIdValue = $openIdConfig.token_endpoint.Split('/')[3]
+            if ($tenantIdValue -match '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$') {
+                Write-Log "Tenant ID found via OpenID config: $tenantIdValue" -Level "INFO"
+                return $tenantIdValue
+            }
+        }
+    }
+    catch {
+        Write-Log "Failed to get Tenant ID via OpenID config: $_" -Level "WARN"
     }
     
     return $null
@@ -128,9 +198,12 @@ function Test-AzureADJoined {
         $dsregOutput = dsregcmd /status 2>&1 | Out-String
         $azureJoined = $dsregOutput -match "AzureAdJoined\s*:\s*YES"
         $domainJoined = $dsregOutput -match "DomainJoined\s*:\s*YES"
+        $workplaceJoined = $dsregOutput -match "WorkplaceJoined\s*:\s*YES"
         
-        if ($azureJoined -or $domainJoined) {
-            Write-Log "Device is Azure AD Joined: $azureJoined, Domain Joined: $domainJoined" -Level "INFO"
+        Write-Log "Device is Azure AD Joined: $azureJoined, Domain Joined: $domainJoined, Workplace Joined: $workplaceJoined" -Level "INFO"
+        
+        # Accept any of these join types - we just need a way to get tenant ID
+        if ($azureJoined -or $domainJoined -or $workplaceJoined) {
             return $true
         }
     }
@@ -337,10 +410,10 @@ function Configure-SilentSSO {
 function Configure-KFM {
     param(
         [Parameter(Mandatory)]
-        [string]$TenantId
+        [string]$TenantIdParam
     )
     
-    Write-Log "Configuring Known Folder Move for tenant: $TenantId" -Level "INFO"
+    Write-Log "Configuring Known Folder Move for tenant: $TenantIdParam" -Level "INFO"
     $changed = $false
     
     # Machine-level policies (HKLM) - these are typically set by GPO or admin scripts
@@ -349,7 +422,7 @@ function Configure-KFM {
     
     $hklmSettings = @{
         # Silent KFM - moves folders without user interaction
-        "KFMSilentOptIn" = $TenantId
+        "KFMSilentOptIn" = $TenantIdParam
         # Block users from opting out of KFM
         "KFMBlockOptOut" = 1
         # Silent account config
@@ -379,7 +452,6 @@ function Configure-KFM {
     }
     
     # User-level settings that can help trigger KFM
-    $hkcuOneDrivePath = "HKCU:\Software\Microsoft\OneDrive"
     $hkcuPolicyPath = "HKCU:\Software\Policies\Microsoft\OneDrive"
     
     # Ensure user policy path exists
@@ -421,15 +493,16 @@ function Restart-OneDrive {
 }
 
 function Get-StatusSummary {
+    param([string]$EffectiveTenantId)
+    
     $installed = Test-OneDriveInstalled
     $signedIn = Test-OneDriveBusinessSignedIn
     $kfmStatus = Test-KFMEnabled
-    $tenantId = Get-AzureTenantId
     
     $summary = @{
         OneDriveInstalled = $installed
         BusinessSignedIn = $signedIn
-        TenantId = $tenantId
+        TenantId = $EffectiveTenantId
         KFM = @{
             FullyEnabled = $kfmStatus.Enabled
             Desktop = $kfmStatus.Desktop
@@ -451,23 +524,36 @@ Write-Log "Computer: $env:COMPUTERNAME" -Level "INFO"
 Write-Log "========================================" -Level "INFO"
 
 try {
-    # Step 1: Check Azure AD join status
-    if (-not (Test-AzureADJoined)) {
-        Write-Log "Device is not Azure AD or Hybrid joined. Cannot configure OneDrive Business." -Level "ERROR"
-        $Script:ExitCode = 2
-        throw "Device not Azure AD joined"
+    # Step 1: Determine Tenant ID (manual parameter takes priority)
+    $effectiveTenantId = $null
+    
+    if (-not [string]::IsNullOrWhiteSpace($TenantId)) {
+        Write-Log "Using manually provided Tenant ID: $TenantId" -Level "INFO"
+        $effectiveTenantId = $TenantId
+    }
+    else {
+        Write-Log "No Tenant ID provided, attempting auto-discovery..." -Level "INFO"
+        
+        # Check Azure AD join status for logging (but don't fail yet)
+        $isJoined = Test-AzureADJoined
+        
+        # Try to auto-discover
+        $effectiveTenantId = Get-AzureTenantId
+        
+        if (-not $effectiveTenantId) {
+            if (-not $isJoined) {
+                Write-Log "Device is not Azure AD, Hybrid, or Workplace joined." -Level "ERROR"
+            }
+            Write-Log "Could not discover Azure AD Tenant ID. Device may not be properly joined." -Level "ERROR"
+            Write-Log "Solution: Provide -TenantId parameter or set TenantId environment variable in Ninja." -Level "ERROR"
+            $Script:ExitCode = 2
+            throw "Tenant ID not found and not provided"
+        }
     }
     
-    # Step 2: Get Tenant ID
-    $tenantId = Get-AzureTenantId
-    if (-not $tenantId) {
-        Write-Log "Could not discover Azure AD Tenant ID. Device may not be properly joined." -Level "ERROR"
-        $Script:ExitCode = 2
-        throw "Tenant ID not found"
-    }
-    Write-Log "Using Tenant ID: $tenantId" -Level "INFO"
+    Write-Log "Using Tenant ID: $effectiveTenantId" -Level "INFO"
     
-    # Step 3: Check/Install OneDrive
+    # Step 2: Check/Install OneDrive
     if (-not (Test-OneDriveInstalled)) {
         $installResult = Install-OneDrive
         if (-not $installResult) {
@@ -478,31 +564,31 @@ try {
         $Script:NeedsOneDriveRestart = $true
     }
     
-    # Step 4: Configure Silent SSO
+    # Step 3: Configure Silent SSO
     $ssoChanged = Configure-SilentSSO
     if ($ssoChanged) {
         $Script:NeedsOneDriveRestart = $true
     }
     
-    # Step 5: Configure KFM
-    $kfmChanged = Configure-KFM -TenantId $tenantId
+    # Step 4: Configure KFM
+    $kfmChanged = Configure-KFM -TenantIdParam $effectiveTenantId
     if ($kfmChanged) {
         $Script:NeedsOneDriveRestart = $true
     }
     
-    # Step 6: Restart OneDrive if needed
+    # Step 5: Restart OneDrive if needed
     if ($Script:NeedsOneDriveRestart) {
         Restart-OneDrive
         # Give OneDrive time to apply settings
         Start-Sleep -Seconds 10
     }
     
-    # Step 7: Final status check
+    # Step 6: Final status check
     Write-Log "========================================" -Level "INFO"
     Write-Log "Final Status Check" -Level "INFO"
     Write-Log "========================================" -Level "INFO"
     
-    $finalStatus = Get-StatusSummary
+    $finalStatus = Get-StatusSummary -EffectiveTenantId $effectiveTenantId
     
     Write-Log "OneDrive Installed: $($finalStatus.OneDriveInstalled)" -Level "INFO"
     Write-Log "Business Account Signed In: $($finalStatus.BusinessSignedIn)" -Level "INFO"

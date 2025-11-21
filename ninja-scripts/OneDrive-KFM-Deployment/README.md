@@ -19,9 +19,12 @@ These scripts automate the complete OneDrive for Business setup:
 ## Requirements
 
 - Windows 10/11
-- Azure AD Hybrid Joined or Azure AD Joined device
+- One of the following device join types:
+  - **Azure AD Joined** - Pure cloud joined
+  - **Hybrid Azure AD Joined** - Domain joined + Azure AD synced
+  - **Workplace Joined (Azure AD Registered)** - User signed into M365 apps
 - NinjaRMM agent
-- User must sign in with Azure AD synced credentials
+- User must have M365 account (for OneDrive Business licensing)
 
 ## Deployment (NinjaRMM)
 
@@ -91,12 +94,23 @@ HKCU:\Software\Microsoft\OneDrive
 
 ## Tenant ID Discovery
 
-The scripts automatically discover the Azure AD Tenant ID from:
-1. `HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\JoinInfo\{GUID}\TenantId`
-2. `dsregcmd /status` output
-3. `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CDJ\AAD\TenantId`
+The scripts automatically discover the Azure AD Tenant ID from multiple sources (in order):
+
+1. **CloudDomainJoin Registry** - `HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\JoinInfo\{GUID}\TenantId`
+2. **dsregcmd TenantId** - For Hybrid/Azure AD Joined devices
+3. **dsregcmd WorkplaceTenantId** - For Workplace Joined (Azure AD Registered) devices
+4. **CDJ\AAD Registry** - `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CDJ\AAD\TenantId`
+5. **IdentityStore Cache** - `HKLM:\SOFTWARE\Microsoft\IdentityStore\Cache` (for SYSTEM context)
 
 No manual tenant ID configuration required!
+
+### Device Join Types Explained
+
+| Join Type | dsregcmd shows | Typical Scenario |
+|-----------|---------------|------------------|
+| Azure AD Joined | `AzureAdJoined: YES` | Cloud-only, Intune managed |
+| Hybrid Azure AD Joined | `AzureAdJoined: YES` + `DomainJoined: YES` | On-prem AD + Azure AD Connect |
+| Workplace Joined | `WorkplaceJoined: YES` | User signed into M365 apps, device not joined |
 
 ## OneDrive Installation
 
@@ -157,7 +171,8 @@ Get-ItemProperty "HKCU:\Software\Microsoft\OneDrive\Accounts\Business1"
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2025-11-21 | Initial release |
+| 1.1.0 | 2025-11-21 | Added support for Workplace Joined (Azure AD Registered) devices. Now discovers `WorkplaceTenantId` from dsregcmd and IdentityStore Cache. |
+| 1.0.0 | 2025-11-21 | Initial release - Hybrid/Azure AD Joined only |
 
 ## License
 
