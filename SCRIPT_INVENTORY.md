@@ -1,7 +1,7 @@
 # Complete Script Inventory
 
 **Repository:** https://github.com/ShadowA2J/it-automation-tools  
-**Last Updated:** November 18, 2025  
+**Last Updated:** November 21, 2025  
 **Maintained By:** Bryan Faulkner
 
 ---
@@ -10,7 +10,7 @@
 
 | Category | Scripts | Status |
 |----------|---------|--------|
-| PowerShell Scripts | 11+ | Mixed |
+| PowerShell Scripts | 13+ | Mixed |
 | Rewst Templates | 4+ | Active |
 | Email Templates | 2 | Active |
 | Documentation | 2+ | Active |
@@ -47,6 +47,14 @@
 ### Office/M365
 **Location:** `/Office_M365/`
 - **Reset-OfficeAndTeams.ps1** - Reset Office and Teams installations
+
+### NinjaRMM Scripts
+**Location:** `/ninja-scripts/`
+- **DellCommandUpdate.ps1** v1.0.0 - Automated Dell firmware and driver updates via Dell Command Update
+- **Uninstall-OldPolyWorksReviewer.ps1** v1.0 - Remove older PolyWorks Reviewer versions
+- **OneDrive-KFM-Deployment/** v1.0.0 - Complete OneDrive Business KFM deployment package:
+  - **Setup-OneDriveKFM-MachinePolicy.ps1** - Machine-level policies (run as SYSTEM)
+  - **Setup-OneDriveBusinessKFM.ps1** - User-context setup (run as logged-in user)
 
 ### Rewst Workflow Templates
 **Location:** `/rewst_workflows/`
@@ -159,6 +167,13 @@ it-automation-tools/
 
 ## 📋 Recent Changes
 
+### November 21, 2025
+- Added OneDrive-KFM-Deployment package to ninja-scripts
+  - Machine policy script for SYSTEM context
+  - User context script for login triggers
+  - Auto tenant ID discovery, silent SSO, KFM enforcement
+- Updated ninja-scripts README
+
 ### November 18, 2025
 - Merged `network_share_management` folder into `file_management`
 - Renamed `powershell_utilities` to `terminal_services`
@@ -186,6 +201,6 @@ it-automation-tools/
 
 ---
 
-**Inventory Version:** 3.1  
-**Last Updated:** November 18, 2025  
+**Inventory Version:** 3.2  
+**Last Updated:** November 21, 2025  
 **Maintained By:** Bryan Faulkner

@@ -13,6 +13,37 @@ This folder contains PowerShell scripts that have been enhanced for reliability 
 
 ## Scripts
 
+### OneDrive-KFM-Deployment/
+**Version:** 1.0.0  
+**Purpose:** Automated OneDrive for Business setup with Silent Sign-In and Known Folder Move (KFM)  
+**Added:** November 21, 2025
+
+A complete two-script deployment package for configuring OneDrive Business on Azure AD joined devices:
+
+| Script | Run As | Purpose |
+|--------|--------|---------|
+| `Setup-OneDriveKFM-MachinePolicy.ps1` | SYSTEM | Sets machine-level policies (HKLM). Run once per device. |
+| `Setup-OneDriveBusinessKFM.ps1` | Logged-in User | User-context setup, install verification, status reporting. Run on login. |
+
+#### Key Features:
+- **Auto Tenant Discovery:** Automatically discovers Azure AD tenant ID from device join info
+- **Silent SSO:** Users automatically signed in with Windows credentials
+- **Known Folder Move:** Desktop, Documents, Pictures redirected to OneDrive
+- **KFM Lock:** Prevents users from disabling folder backup
+- **Idempotent:** Safe to run multiple times on shared computers
+- **OneDrive Install:** Installs OneDrive via winget or Microsoft CDN if missing
+
+#### Exit Codes:
+| Code | Machine Script | User Script |
+|------|---------------|-------------|
+| 0 | All policies configured | Fully configured with KFM |
+| 1 | Some policies set | Config applied, needs login cycle |
+| 2 | Failed | Failed - see output |
+
+See [OneDrive-KFM-Deployment/README.md](OneDrive-KFM-Deployment/README.md) for full documentation.
+
+---
+
 ### DellCommandUpdate.ps1
 **Version:** 1.0.0  
 **Purpose:** Automate Dell firmware and driver updates via Dell Command Update  
@@ -82,24 +113,7 @@ Run As: SYSTEM
 - Check BitLocker status (script auto-suspends BitLocker)
 - Review DCU logs at: `C:\ProgramData\Dell\CommandUpdate\log`
 
-## Development Notes
-
-### Modifications from Original:
-- Added `Write-Log` function with dual output (console + event log)
-- Enhanced error handling with try/catch blocks
-- Added timeout parameters to all `Invoke-WebRequest` calls
-- Improved version comparison using `[version]` casting
-- Added fallback versions for offline scenarios
-- Better null/empty validation throughout
-- PassThru on Start-Process for exit code capture
-- Enhanced path resolution for DCU CLI detection
-
-### Testing Recommendations:
-1. Test on a Dell device first
-2. Monitor first run closely via NinjaRMM
-3. Check Windows Event Log after completion
-4. Verify DCU installation in Programs and Features
-5. Confirm updates applied via Dell Command Update UI
+---
 
 ### Uninstall-OldPolyWorksReviewer.ps1
 **Version:** 1.0  
@@ -139,6 +153,27 @@ Timeout: 15 minutes
 
 ---
 
+## Development Notes
+
+### Modifications from Original:
+- Added `Write-Log` function with dual output (console + event log)
+- Enhanced error handling with try/catch blocks
+- Added timeout parameters to all `Invoke-WebRequest` calls
+- Improved version comparison using `[version]` casting
+- Added fallback versions for offline scenarios
+- Better null/empty validation throughout
+- PassThru on Start-Process for exit code capture
+- Enhanced path resolution for DCU CLI detection
+
+### Testing Recommendations:
+1. Test on a Dell device first
+2. Monitor first run closely via NinjaRMM
+3. Check Windows Event Log after completion
+4. Verify DCU installation in Programs and Features
+5. Confirm updates applied via Dell Command Update UI
+
+---
+
 ## Contributing
 
 When adding scripts to this folder:
@@ -159,6 +194,6 @@ For issues specific to NinjaRMM deployment:
 
 ---
 
-**Folder Version:** 1.0.0  
-**Last Updated:** November 19, 2025  
+**Folder Version:** 1.1.0  
+**Last Updated:** November 21, 2025  
 **Maintained By:** Bryan Faulkner
