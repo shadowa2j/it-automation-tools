@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-USPS Tracking Page Structure Discovery Script v2
-Waits longer and tries to bypass basic bot detection.
+USPS Tracking Page Structure Discovery Script v3
+Uses playwright-stealth to bypass bot detection.
 """
 
 import sys
 from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 
 def discover_usps_structure(tracking_number: str):
     """Load USPS tracking page and dump rendered HTML for inspection."""
@@ -13,14 +14,15 @@ def discover_usps_structure(tracking_number: str):
     url = f"https://tools.usps.com/go/TrackConfirmAction?tLabels={tracking_number}"
     
     with sync_playwright() as p:
-        # Use Firefox instead - sometimes works better with anti-bot
-        browser = p.firefox.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
             viewport={"width": 1920, "height": 1080},
             locale="en-US",
         )
         page = context.new_page()
+        
+        # Apply stealth to mask automation signals
+        stealth_sync(page)
         
         print(f"Loading: {url}")
         
@@ -62,29 +64,12 @@ def discover_usps_structure(tracking_number: str):
         print("\n--- Searching for elements ---")
         
         selectors_to_try = [
-            # Status related
-            ".tracking-progress-bar-status",
-            ".tb-status", 
-            ".delivery-status",
-            ".status",
             "[class*='status']",
             "[class*='delivery']",
             "[class*='tracking']",
-            # Container related
-            ".track-bar-container",
-            ".tracking-summary",
-            "#tracked-numbers",
-            ".product-summary",
-            # History related  
-            "#trackingHistory",
-            ".tracking-history",
             "[class*='history']",
-            # Any divs with data
-            "div[class*='result']",
-            "div[class*='detail']",
-            # Text content
+            "[class*='result']",
             "h1", "h2", "h3",
-            ".banner-content",
         ]
         
         for selector in selectors_to_try:
@@ -96,7 +81,7 @@ def discover_usps_structure(tracking_number: str):
                         text = el.inner_text()[:150].replace('\n', ' ').strip()
                         if text:
                             print(f"    [{i}]: {text}")
-            except Exception as e:
+            except Exception:
                 pass
         
         browser.close()
