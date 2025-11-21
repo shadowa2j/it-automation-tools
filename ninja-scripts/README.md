@@ -101,6 +101,44 @@ Run As: SYSTEM
 4. Verify DCU installation in Programs and Features
 5. Confirm updates applied via Dell Command Update UI
 
+### Uninstall-OldPolyWorksReviewer.ps1
+**Version:** 1.0  
+**Purpose:** Remove older versions of PolyWorks Reviewer, keeping only the newest  
+**Modified:** November 21, 2025
+
+#### What it does:
+1. Scans both 32-bit and 64-bit registry uninstall keys
+2. Finds all installed PolyWorks Reviewer versions (InnovMetric)
+3. Compares version numbers (e.g., 25.3.2628 > 24.3.3048)
+4. Keeps the highest version, silently uninstalls all others
+5. Handles both MSI and EXE-based uninstallers
+
+#### Key Features:
+- **Dynamic Detection:** Automatically finds newest version - no hardcoding needed
+- **Version Comparison:** Uses actual version numbers, not product year names
+- **Multiple Uninstall Methods:** Supports MSI, QuietUninstallString, and EXE with silent switches
+- **Safe:** Only removes older versions, never the newest
+- **NinjaRMM Compatible:** Works under SYSTEM account context
+
+#### Usage in NinjaRMM:
+
+**As a Scheduled Script:**
+```
+Schedule Type: After software deployment or Weekly cleanup
+Run As: SYSTEM
+Timeout: 15 minutes
+```
+
+#### Exit Codes:
+- `0` - Success (older versions removed or nothing to remove)
+
+#### Requirements:
+- PowerShell 5.1 or higher
+- Administrative privileges (SYSTEM account)
+- At least one version of PolyWorks Reviewer installed
+
+---
+
 ## Contributing
 
 When adding scripts to this folder:
