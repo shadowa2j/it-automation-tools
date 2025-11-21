@@ -111,6 +111,15 @@ function Test-OneDriveInstalled {
 }
 
 function Get-AzureTenantId {
+    # Parse dsregcmd once and reuse for efficiency
+    $dsregOutput = $null
+    try {
+        $dsregOutput = dsregcmd /status 2>&1 | Out-String
+    }
+    catch {
+        Write-Log "Failed to run dsregcmd: $_" -Level "WARN"
+    }
+    
     # Method 1: Try registry CloudDomainJoin info (most reliable for hybrid joined)
     $joinInfoPath = "HKLM:\SYSTEM\CurrentControlSet\Control\CloudDomainJoin\JoinInfo"
     if (Test-Path $joinInfoPath) {
@@ -124,30 +133,24 @@ function Get-AzureTenantId {
         }
     }
     
-    # Method 2: Parse dsregcmd output for TenantId (Hybrid/Azure AD Joined)
-    try {
-        $dsregOutput = dsregcmd /status 2>&1 | Out-String
-        if ($dsregOutput -match "TenantId\s*:\s*([a-f0-9\-]{36})") {
+    # Method 2: Parse dsregcmd output for TenantId (Hybrid/Azure AD Joined - device level)
+    # Use multiline mode to match at start of line, accounts for leading whitespace
+    if ($dsregOutput) {
+        if ($dsregOutput -match '(?m)^\s*TenantId\s*:\s*([a-fA-F0-9\-]{36})') {
             $tenantIdValue = $matches[1]
             Write-Log "Tenant ID found via dsregcmd (TenantId): $tenantIdValue" -Level "INFO"
             return $tenantIdValue
         }
     }
-    catch {
-        Write-Log "Failed to parse dsregcmd output: $_" -Level "WARN"
-    }
     
     # Method 3: Parse dsregcmd output for WorkplaceTenantId (Workplace Joined / Azure AD Registered)
-    try {
-        $dsregOutput = dsregcmd /status 2>&1 | Out-String
-        if ($dsregOutput -match "WorkplaceTenantId\s*:\s*([a-f0-9\-]{36})") {
+    # This covers devices that are only workplace joined, not hybrid/Azure AD joined
+    if ($dsregOutput) {
+        if ($dsregOutput -match '(?m)^\s*WorkplaceTenantId\s*:\s*([a-fA-F0-9\-]{36})') {
             $tenantIdValue = $matches[1]
             Write-Log "Tenant ID found via dsregcmd (WorkplaceTenantId): $tenantIdValue" -Level "INFO"
             return $tenantIdValue
         }
-    }
-    catch {
-        Write-Log "Failed to parse WorkplaceTenantId from dsregcmd: $_" -Level "WARN"
     }
     
     # Method 4: Check AAD registry key
@@ -166,7 +169,7 @@ function Get-AzureTenantId {
         $cacheKeys = Get-ChildItem $aadAccountsPath -Recurse -ErrorAction SilentlyContinue
         foreach ($key in $cacheKeys) {
             $tenantIdValue = Get-ItemProperty -Path $key.PSPath -Name "TenantId" -ErrorAction SilentlyContinue
-            if ($tenantIdValue.TenantId -and $tenantIdValue.TenantId -match "^[a-f0-9\-]{36}$") {
+            if ($tenantIdValue.TenantId -and $tenantIdValue.TenantId -match "^[a-fA-F0-9\-]{36}$") {
                 Write-Log "Tenant ID found via IdentityStore Cache: $($tenantIdValue.TenantId)" -Level "INFO"
                 return $tenantIdValue.TenantId
             }
