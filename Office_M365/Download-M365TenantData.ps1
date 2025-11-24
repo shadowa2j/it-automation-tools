@@ -25,7 +25,7 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$OutputPath = "Z:\File Backups\Davalor"
+    [string]$OutputPath = "\\qcsfs01w\qcs-share\File Backups\Davalor"
 )
 
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Sites, Microsoft.Graph.Users
