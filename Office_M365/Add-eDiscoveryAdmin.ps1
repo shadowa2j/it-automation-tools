@@ -32,12 +32,12 @@ try {
     # Step 1: Add user to eDiscovery Manager role group
     Write-Host "Adding $UserPrincipalName to eDiscovery Manager role group..." -ForegroundColor Cyan
     Add-RoleGroupMember -Identity "eDiscovery Manager" -Member $UserPrincipalName -ErrorAction Stop
-    Write-Host "✓ Successfully added to eDiscovery Manager role group" -ForegroundColor Green
+    Write-Host "Successfully added to eDiscovery Manager role group" -ForegroundColor Green
     
     # Step 2: Promote user to eDiscovery Administrator (can access ALL cases)
     Write-Host "Promoting $UserPrincipalName to eDiscovery Administrator..." -ForegroundColor Cyan
     Add-eDiscoveryCaseAdmin -User $UserPrincipalName -ErrorAction Stop
-    Write-Host "✓ Successfully promoted to eDiscovery Administrator" -ForegroundColor Green
+    Write-Host "Successfully promoted to eDiscovery Administrator" -ForegroundColor Green
     
     # Verify the changes
     Write-Host "`nVerifying role assignments..." -ForegroundColor Cyan
@@ -48,7 +48,7 @@ try {
     Write-Host "eDiscovery Administrators:" -ForegroundColor Yellow
     Get-eDiscoveryCaseAdmin | Format-Table Name, Email
     
-    Write-Host "`n✓ All permissions have been successfully assigned!" -ForegroundColor Green
+    Write-Host "`nAll permissions have been successfully assigned!" -ForegroundColor Green
     Write-Host "Note: It may take up to 60 minutes for permissions to fully propagate." -ForegroundColor Yellow
 }
 catch {
