@@ -44,14 +44,21 @@
 
 # List of user email addresses to export
 $UsersToExport = @(
-    "nsurhabi@wilbertinc.com",
-    "ycannon@wilbertinc.com",
-    "bkennedy@wilbertinc.com",
-    "ktweneboah@wilbertinc.com",
-    "amokrzycki@wilbertinc.com",
-    "dhoffbeck@wilbertinc.com",
-    "jnovitt@wilbertinc.com",
-    "rgaddes@wilbertinc.com"
+    "awujcik@wilbertinc.com",
+    "adamanda@wilbertinc.com",
+    "cchay@wilbertinc.com",
+    "cjenkins@wilbertinc.com",
+    "jrichardson@wilbertinc.com",
+    "jpage@wilbertinc.com",
+    "kdurham@wilbertinc.com",
+    "lsmith@wilbertinc.com",
+    "mchilds@wilbertinc.com",
+    "nmroz@wilbertinc.com",
+    "pfontana@wilbertinc.com",
+    "spierce.old@wilbertinc.com",
+    "smcdowell@wilbertinc.com",
+    "TKepley@wilbertinc.com",
+    "tparks@wilbertinc.com"
 )
 
 # Network share path where you'll download the PST files (for reference in notes)
