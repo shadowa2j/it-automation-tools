@@ -25,7 +25,7 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$OutputPath = "C:\M365TenantBackup"
+    [string]$OutputPath = "Z:\File Backups\Davalor"
 )
 
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Sites, Microsoft.Graph.Users
@@ -203,8 +203,9 @@ try {
         Write-Progress -Activity "Scanning OneDrive Sites" -Status "Processing $($user.UserPrincipalName)" -PercentComplete (($userCount / $users.Count) * 100)
         
         try {
-            # Get user's OneDrive
-            $drive = Get-MgUserDrive -UserId $user.Id -ErrorAction SilentlyContinue
+            # Get user's OneDrive (business drive type only)
+            $drives = Get-MgUserDrive -UserId $user.Id -ErrorAction SilentlyContinue
+            $drive = $drives | Where-Object { $_.DriveType -eq 'business' } | Select-Object -First 1
             
             if ($drive) {
                 Write-Log "Scanning OneDrive for: $($user.UserPrincipalName)" -Level Info
@@ -252,8 +253,8 @@ Write-Log "`nDiscovering SharePoint sites..." -Level Info
 $sharePointData = @()
 
 try {
-    # Get all SharePoint sites
-    $sites = Get-MgSite -All -Property Id, DisplayName, WebUrl, SiteCollection
+    # Get all SharePoint sites using search
+    $sites = Get-MgSite -Search "*" -All
     Write-Log "Found $($sites.Count) SharePoint sites" -Level Info
     
     $siteCount = 0
