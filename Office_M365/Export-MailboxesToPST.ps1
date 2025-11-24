@@ -44,11 +44,18 @@
 
 # List of user email addresses to export
 $UsersToExport = @(
-    "shernandez@prismplastics.com"
+    "nsurhabi@wilbertinc.com",
+    "ycannon@wilbertinc.com",
+    "bkennedy@wilbertinc.com",
+    "ktweneboah@wilbertinc.com",
+    "amokrzycki@wilbertinc.com",
+    "dhoffbeck@wilbertinc.com",
+    "jnovitt@wilbertinc.com",
+    "rgaddes@wilbertinc.com"
 )
 
 # Network share path where you'll download the PST files (for reference in notes)
-$DownloadPath = "E:\OneDrive - PRISM Plastics\Scripts"
+$DownloadPath = "C:\Temp\Scripts"
 
 # Prefix for search names (helps identify these searches later)
 $SearchPrefix = "MailboxExport"
