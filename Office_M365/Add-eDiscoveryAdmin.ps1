@@ -24,8 +24,8 @@ if (-not (Get-Module -ListAvailable -Name ExchangeOnlineManagement)) {
 
 Import-Module ExchangeOnlineManagement
 
-# Connect to Security & Compliance PowerShell
-Write-Host "Connecting to Security `& Compliance PowerShell..." -ForegroundColor Cyan
+# Connect to Security and Compliance PowerShell
+Write-Host "Connecting to Security and Compliance PowerShell..." -ForegroundColor Cyan
 Connect-IPPSSession
 
 try {
@@ -56,6 +56,6 @@ catch {
 }
 finally {
     # Disconnect session
-    Write-Host "`nDisconnecting from Security `& Compliance PowerShell..." -ForegroundColor Cyan
+    Write-Host "`nDisconnecting from Security and Compliance PowerShell..." -ForegroundColor Cyan
     Disconnect-ExchangeOnline -Confirm:$false
 }
