@@ -31,7 +31,7 @@ Connect-IPPSSession
 try {
     # Step 1: Add user to eDiscovery Manager role group
     Write-Host "Adding $UserPrincipalName to eDiscovery Manager role group..." -ForegroundColor Cyan
-    Add-RoleGroupMember -Identity "eDiscovery Manager" -Member $UserPrincipalName -ErrorAction Stop
+    Add-RoleGroupMember -Identity "eDiscoveryManager" -Member $UserPrincipalName -ErrorAction Stop
     Write-Host "Successfully added to eDiscovery Manager role group" -ForegroundColor Green
     
     # Step 2: Promote user to eDiscovery Administrator (can access ALL cases)
@@ -43,7 +43,7 @@ try {
     Write-Host "`nVerifying role assignments..." -ForegroundColor Cyan
     
     Write-Host "`neDiscovery Manager Role Group Members:" -ForegroundColor Yellow
-    Get-RoleGroupMember -Identity "eDiscovery Manager" | Where-Object {$_.Name -like "*$UserPrincipalName*"} | Format-Table Name, PrimarySmtpAddress
+    Get-RoleGroupMember -Identity "eDiscoveryManager" | Where-Object {$_.Name -like "*$UserPrincipalName*"} | Format-Table Name, PrimarySmtpAddress
     
     Write-Host "eDiscovery Administrators:" -ForegroundColor Yellow
     Get-eDiscoveryCaseAdmin | Format-Table Name, Email
