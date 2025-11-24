@@ -457,9 +457,15 @@ function Configure-KFM {
     # User-level settings that can help trigger KFM
     $hkcuPolicyPath = "HKCU:\Software\Policies\Microsoft\OneDrive"
     
-    # Ensure user policy path exists
-    if (-not (Test-Path $hkcuPolicyPath)) {
-        New-Item -Path $hkcuPolicyPath -Force | Out-Null
+    # Try to ensure user policy path exists (may be blocked by GPO)
+    try {
+        if (-not (Test-Path $hkcuPolicyPath)) {
+            New-Item -Path $hkcuPolicyPath -Force -ErrorAction Stop | Out-Null
+        }
+    }
+    catch {
+        Write-Log "Cannot create HKCU policy path (may be locked by GPO): $($_.Exception.Message)" -Level "WARN"
+        # Continue anyway - this path is optional
     }
     
     # Check if KFM has been silently attempted before and reset if needed

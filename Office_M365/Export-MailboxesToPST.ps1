@@ -97,101 +97,103 @@ $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 Write-Host "`n============================================" -ForegroundColor Cyan
 Write-Host "MAILBOX SEARCH AUTOMATION" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "Creating compliance searches for $($UsersToExport.Count) user(s)..." -ForegroundColor White
+Write-Host "Creating single compliance search for $($UsersToExport.Count) mailbox(es)..." -ForegroundColor White
 Write-Host "Timestamp: $Timestamp`n" -ForegroundColor Gray
 
-foreach ($User in $UsersToExport) {
-    Write-Host "Processing: $User" -ForegroundColor Yellow
+# Create a single search name
+$SearchName = "$SearchPrefix`_$Timestamp"
+
+Write-Host "Creating search: $SearchName" -ForegroundColor Yellow
+Write-Host "  Mailboxes: $($UsersToExport -join ', ')" -ForegroundColor Gray
+
+try {
+    # Create the compliance search for all users at once
+    Write-Host "  Creating compliance search..." -ForegroundColor Gray
+    $Search = New-ComplianceSearch -Name $SearchName `
+                                   -ExchangeLocation $UsersToExport `
+                                   -AllowNotFoundExchangeLocationsEnabled $false `
+                                   -ErrorAction Stop
     
-    # Create unique search name
-    $SearchName = "$SearchPrefix`_$($User.Replace('@','_').Replace('.','_'))_$Timestamp"
+    # Start the search
+    Write-Host "  Starting search..." -ForegroundColor Gray
+    Start-ComplianceSearch -Identity $SearchName -ErrorAction Stop
     
-    try {
-        # Create the compliance search
-        Write-Host "  Creating compliance search..." -ForegroundColor Gray
-        $Search = New-ComplianceSearch -Name $SearchName `
-                                       -ExchangeLocation $User `
-                                       -AllowNotFoundExchangeLocationsEnabled $false `
-                                       -ErrorAction Stop
+    # Wait for search to complete
+    Write-Host "  Waiting for search to complete..." -ForegroundColor Gray
+    $SearchStatus = $null
+    $MaxWaitMinutes = 30
+    $WaitedMinutes = 0
+    
+    do {
+        Start-Sleep -Seconds 10
+        $SearchStatus = Get-ComplianceSearch -Identity $SearchName
+        $WaitedMinutes += 0.17
         
-        # Start the search
-        Write-Host "  Starting search..." -ForegroundColor Gray
-        Start-ComplianceSearch -Identity $SearchName -ErrorAction Stop
+        # Show progress
+        Write-Host "`r  Waiting... $([math]::Round($WaitedMinutes, 1)) minutes elapsed" -NoNewline -ForegroundColor Gray
         
-        # Wait for search to complete
-        Write-Host "  Waiting for search to complete..." -ForegroundColor Gray
-        $SearchStatus = $null
-        $MaxWaitMinutes = 30
-        $WaitedMinutes = 0
+        if ($WaitedMinutes -gt $MaxWaitMinutes) {
+            Write-Host "`n  Search timed out after $MaxWaitMinutes minutes" -ForegroundColor Red
+            break
+        }
+    } while ($SearchStatus.Status -ne "Completed")
+    
+    Write-Host "" # New line after progress
+    
+    if ($SearchStatus.Status -eq "Completed") {
+        Write-Host "  Search completed successfully" -ForegroundColor Green
+        Write-Host "    Items found: $($SearchStatus.Items)" -ForegroundColor Gray
         
-        do {
-            Start-Sleep -Seconds 10
-            $SearchStatus = Get-ComplianceSearch -Identity $SearchName
-            $WaitedMinutes += 0.17
-            
-            if ($WaitedMinutes -gt $MaxWaitMinutes) {
-                Write-Host "  Search timed out after $MaxWaitMinutes minutes" -ForegroundColor Red
-                break
-            }
-        } while ($SearchStatus.Status -ne "Completed")
-        
-        if ($SearchStatus.Status -eq "Completed") {
-            Write-Host "  Search completed successfully" -ForegroundColor Green
-            Write-Host "    Items found: $($SearchStatus.Items)" -ForegroundColor Gray
-            
-            # Parse size - it comes as a string like "1.234 GB (1234567 bytes)"
-            $SizeString = $SearchStatus.Size
-            $SizeMB = 0
-            $SizeDisplay = "Unknown"
-            if ($SizeString -match '\((\d+) bytes\)') {
-                $SizeBytes = [int64]$matches[1]
-                $SizeMB = [math]::Round($SizeBytes / 1MB, 2)
-                $SizeGB = [math]::Round($SizeBytes / 1GB, 2)
-                if ($SizeGB -gt 1) {
-                    $SizeDisplay = "$SizeGB GB"
-                } else {
-                    $SizeDisplay = "$SizeMB MB"
-                }
-            }
-            Write-Host "    Size: $SizeDisplay" -ForegroundColor Gray
-            
-            # Track this search job
-            $SearchJobs += [PSCustomObject]@{
-                User = $User
-                SearchName = $SearchName
-                ItemCount = $SearchStatus.Items
-                SizeMB = $SizeMB
-                SizeDisplay = $SizeDisplay
-                Status = "Completed - Ready for Export"
-                ComplianceURL = "https://compliance.microsoft.com/contentsearch?viewid=search&search=$([System.Web.HttpUtility]::UrlEncode($SearchName))"
-            }
-        } else {
-            Write-Host "  Search did not complete successfully. Status: $($SearchStatus.Status)" -ForegroundColor Red
-            $SearchJobs += [PSCustomObject]@{
-                User = $User
-                SearchName = $SearchName
-                ItemCount = 0
-                SizeMB = 0
-                SizeDisplay = "N/A"
-                Status = "Failed: Search status was $($SearchStatus.Status)"
-                ComplianceURL = "N/A"
+        # Parse size - it comes as a string like "1.234 GB (1234567 bytes)"
+        $SizeString = $SearchStatus.Size
+        $SizeMB = 0
+        $SizeDisplay = "Unknown"
+        if ($SizeString -match '\((\d+) bytes\)') {
+            $SizeBytes = [int64]$matches[1]
+            $SizeMB = [math]::Round($SizeBytes / 1MB, 2)
+            $SizeGB = [math]::Round($SizeBytes / 1GB, 2)
+            if ($SizeGB -gt 1) {
+                $SizeDisplay = "$SizeGB GB"
+            } else {
+                $SizeDisplay = "$SizeMB MB"
             }
         }
+        Write-Host "    Size: $SizeDisplay" -ForegroundColor Gray
         
-    } catch {
-        Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        # Track this search job
         $SearchJobs += [PSCustomObject]@{
-            User = $User
+            Mailboxes = $UsersToExport -join ', '
+            SearchName = $SearchName
+            ItemCount = $SearchStatus.Items
+            SizeMB = $SizeMB
+            SizeDisplay = $SizeDisplay
+            Status = "Completed - Ready for Export"
+            ComplianceURL = "https://compliance.microsoft.com/contentsearch?viewid=search&search=$([System.Web.HttpUtility]::UrlEncode($SearchName))"
+        }
+    } else {
+        Write-Host "  Search did not complete successfully. Status: $($SearchStatus.Status)" -ForegroundColor Red
+        $SearchJobs += [PSCustomObject]@{
+            Mailboxes = $UsersToExport -join ', '
             SearchName = $SearchName
             ItemCount = 0
             SizeMB = 0
             SizeDisplay = "N/A"
-            Status = "Failed: $($_.Exception.Message)"
+            Status = "Failed: Search status was $($SearchStatus.Status)"
             ComplianceURL = "N/A"
         }
     }
     
-    Write-Host ""
+} catch {
+    Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    $SearchJobs += [PSCustomObject]@{
+        Mailboxes = $UsersToExport -join ', '
+        SearchName = $SearchName
+        ItemCount = 0
+        SizeMB = 0
+        SizeDisplay = "N/A"
+        Status = "Failed: $($_.Exception.Message)"
+        ComplianceURL = "N/A"
+    }
 }
 
 # Display summary
@@ -199,7 +201,7 @@ Write-Host "`n============================================" -ForegroundColor Cya
 Write-Host "SEARCH RESULTS SUMMARY" -ForegroundColor Cyan
 Write-Host "============================================`n" -ForegroundColor Cyan
 
-$SearchJobs | Format-Table User, ItemCount, SizeDisplay, Status -AutoSize
+$SearchJobs | Format-Table Mailboxes, ItemCount, SizeDisplay, Status -AutoSize
 
 # Count successful searches
 $SuccessfulSearches = $SearchJobs | Where-Object { $_.Status -like "*Ready for Export*" }
@@ -218,20 +220,21 @@ Write-Host "============================================`n" -ForegroundColor Cya
 Write-Host "All searches have completed successfully!" -ForegroundColor Green
 Write-Host "Microsoft requires exports to be initiated manually through the compliance portal.`n" -ForegroundColor Yellow
 
-Write-Host "QUICK EXPORT LINKS:" -ForegroundColor White
-Write-Host "Click each link below to export the corresponding mailbox:`n" -ForegroundColor Gray
+Write-Host "QUICK EXPORT LINK:" -ForegroundColor White
+Write-Host "Click the link below to export all mailboxes at once:`n" -ForegroundColor Gray
 
 foreach ($Job in $SuccessfulSearches) {
-    Write-Host "User: $($Job.User)" -ForegroundColor Yellow
+    Write-Host "Search: $($Job.SearchName)" -ForegroundColor Yellow
+    Write-Host "  Mailboxes: $($Job.Mailboxes)" -ForegroundColor Gray
     Write-Host "  Items: $($Job.ItemCount) | Size: $($Job.SizeDisplay)" -ForegroundColor Gray
     Write-Host "  Direct Link: $($Job.ComplianceURL)" -ForegroundColor Cyan
     Write-Host ""
 }
 
 Write-Host "`n============================================" -ForegroundColor Cyan
-Write-Host "EXPORT STEPS (for each link above)" -ForegroundColor Cyan
+Write-Host "EXPORT STEPS" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "1. Click the direct link for the user" -ForegroundColor White
+Write-Host "1. Click the direct link above" -ForegroundColor White
 Write-Host "2. Click 'Actions' > 'Export results'" -ForegroundColor White
 Write-Host "3. Configure export options:" -ForegroundColor White
 Write-Host "   - Output options: All items, excluding ones with unrecognized format" -ForegroundColor Gray
@@ -241,15 +244,16 @@ Write-Host "4. Click 'Export'" -ForegroundColor White
 Write-Host "5. Wait for export to complete (monitor in 'Exports' tab)" -ForegroundColor White
 Write-Host "6. Click 'Download results' and install eDiscovery Export Tool if prompted" -ForegroundColor White
 Write-Host "7. Specify download location: $DownloadPath" -ForegroundColor White
-Write-Host "`nNote: PST files will automatically split into 10GB chunks if larger." -ForegroundColor Yellow
+Write-Host "`nNote: Each mailbox will be in a separate PST file." -ForegroundColor Yellow
+Write-Host "Note: PST files will automatically split into 10GB chunks if larger." -ForegroundColor Yellow
 
 Write-Host "`n============================================" -ForegroundColor Cyan
-Write-Host "ALTERNATIVE: Batch Export" -ForegroundColor Cyan
+Write-Host "ALTERNATIVE: Manual Navigation" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "To export all searches at once:" -ForegroundColor White
+Write-Host "If the direct link doesn't work:" -ForegroundColor White
 Write-Host "1. Go to: https://compliance.microsoft.com/contentsearch" -ForegroundColor Cyan
-Write-Host "2. Select multiple searches using the checkboxes" -ForegroundColor White
-Write-Host "3. Click 'Actions' > 'Export results' to batch export" -ForegroundColor White
+Write-Host "2. Find the search: $($SuccessfulSearches[0].SearchName)" -ForegroundColor White
+Write-Host "3. Click 'Actions' > 'Export results'" -ForegroundColor White
 
 # Save search details to file for reference
 $OutputFile = "C:\temp\MailboxExportSearches_$Timestamp.txt"
@@ -263,7 +267,7 @@ Mailbox Export Searches - Created: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 
 foreach ($Job in $SearchJobs) {
     $OutputContent += @"
-User: $($Job.User)
+Mailboxes: $($Job.Mailboxes)
 Search Name: $($Job.SearchName)
 Items: $($Job.ItemCount)
 Size: $($Job.SizeDisplay)
