@@ -1,0 +1,17 @@
+﻿Mailbox Export Searches - Created: 2025-11-24 13:58:17
+============================================
+Mailboxes: accounting@davalor.com, annette.cappella@davalor.com, brandon.hammack@davalor.com, brian.hopp@davalor.com, christopher.cotting@davalor.com, craig.levy@davalor.com, dan.binkley@davalor.com, daryl.miller@davalor.com, calendars@davalor.com, donna.lutz@davalor.com, edward.schoenherr@davalor.com, elizabeth.giovannangeli@davalor.com, elizabeth.mcwilliams@davalor.com, ernest.hilton@davalor.com, fakhra.zahoor@davalor.com, frank.palazzolo@davalor.com, holli.mcewan@davalor.com, iqsrv.davalor@davalor.com, itsupport@davalor.com, james.lemere@davalor.com, jasmina.bircevic@davalor.com, jeff.nolfo@davalor.com, jen.wressell@davalor.com, jena.mccoll@davalor.com, jeremy.koss@davalor.com, john.boeschenstein@davalor.com, jwilson@davalor.com, joshua.wendland@davalor.com, karthika.konda@davalor.com, kelly.hollandsworth@davalor.com, ken.carlson@davalor.com, kenneth.clark@davalor.com, mary.maley@davalor.com, material.davalor@davalor.com, material2.davalor@davalor.com, michael.houston@davalor.com, mgrosor@davalor.com, admin@davalormoldcompany.onmicrosoft.com, paul.fee@davalor.com, quality.office1-1@davalor.com, quality.office1-2@davalor.com, quality.office1-3@davalor.com, quality.office2-1@davalor.com, quality.office2-2@davalor.com, quality.office2-3@davalor.com, quality.office3-1@davalor.com, quality.office3-2@davalor.com, quality.office3-3@davalor.com, robert.williams@davalor.com, rodolfo.sanchez@davalor.com, sanjiv.sheth@davalor.com, scott.osterling@davalor.com, sharleene.dionne@davalor.com, steve.angst@davalor.com, steve.arnold@davalor.com, steve.hogston@davalor.com, steve.tomlinson@davalor.com, terry.darling@davalor.com, theresa.sprague@davalor.com, tony.hall@davalor.com, vincent.bobek@davalor.com
+Search Name: MailboxExport_20251124_135612
+Items: 945250
+Size: Unknown
+Status: Completed - Ready for Export
+Direct Link: https://compliance.microsoft.com/contentsearch?viewid=search&search=MailboxExport_20251124_135612
+
+Download Location: C:\Temp\Scripts
+
+Export Instructions:
+1. Click each direct link above
+2. Click Actions > Export results
+3. Follow the export wizard
+4. Download using eDiscovery Export Tool
+
