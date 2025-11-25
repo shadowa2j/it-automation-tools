@@ -25,7 +25,7 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$OutputPath = "\\qcsfs01w\qcs-share\File Backups\Davalor"
+    [string]$OutputPath = "C:\M365TenantBackup"
 )
 
 #Requires -Modules Microsoft.Graph.Authentication, Microsoft.Graph.Sites, Microsoft.Graph.Users
