@@ -1,0 +1,953 @@
+openapi: 3.0.3
+info:
+  title: OneRoster v1.1 Rostering API
+  description: |
+    1EdTech OneRoster v1.1 REST API - Rostering endpoints focused on student and family information.
+    
+    This specification covers the rostering service endpoints for managing users (students, parents, guardians),
+    demographics, enrollments, and organizations.
+    
+    Based on the 1EdTech OneRoster v1.1 Final Specification (Document Release 2.0.1, April 2022).
+  version: 1.1.0
+  contact:
+    name: 1EdTech Consortium
+    url: https://www.imsglobal.org/oneroster-v11-final-specification
+  license:
+    name: 1EdTech Specification License
+    url: https://www.imsglobal.org/speclicense.html
+
+servers:
+  - url: https://{domain}/ims/oneroster/v1p1
+    description: OneRoster v1.1 API Server
+    variables:
+      domain:
+        default: example.com
+        description: The domain of the OneRoster provider
+
+security:
+  - OAuth2: []
+
+tags:
+  - name: Users
+    description: User management (students, teachers, parents, guardians, etc.)
+  - name: Students
+    description: Student-specific endpoints (subset of Users with role=student)
+  - name: Demographics
+    description: Demographic information for users
+  - name: Enrollments
+    description: User enrollments in classes
+  - name: Organizations
+    description: Organizations (districts, schools, departments)
+  - name: Schools
+    description: School-specific endpoints (subset of Orgs with type=school)
+
+paths:
+  # ==========================================================================
+  # USERS
+  # ==========================================================================
+  /users:
+    get:
+      operationId: getAllUsers
+      summary: Get all users
+      description: |
+        Return collection of users. Users include students, teachers, parents, guardians, 
+        relatives, aides, administrators, and proctors.
+      tags:
+        - Users
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      summary: Get a specific user
+      description: Return a specific user by sourcedId.
+      tags:
+        - Users
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/{user_id}/classes:
+    get:
+      operationId: getClassesForUser
+      summary: Get classes for a user
+      description: Return the collection of classes attended by this user.
+      tags:
+        - Users
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The sourcedId of the user
+          schema:
+            $ref: '#/components/schemas/GUID'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================================================
+  # STUDENTS
+  # ==========================================================================
+  /students:
+    get:
+      operationId: getAllStudents
+      summary: Get all students
+      description: Return collection of students. A Student is an instance of a User with role=student.
+      tags:
+        - Students
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/{id}:
+    get:
+      operationId: getStudent
+      summary: Get a specific student
+      description: Return a specific student by sourcedId. A Student is an instance of a User.
+      tags:
+        - Students
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /students/{student_id}/classes:
+    get:
+      operationId: getClassesForStudent
+      summary: Get classes for a student
+      description: Return the collection of classes that this student is taking.
+      tags:
+        - Students
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          description: The sourcedId of the student
+          schema:
+            $ref: '#/components/schemas/GUID'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================================================
+  # DEMOGRAPHICS
+  # ==========================================================================
+  /demographics:
+    get:
+      operationId: getAllDemographics
+      summary: Get all demographics
+      description: |
+        Return collection of demographics. Demographics data is considered privileged 
+        and requires the roster-demographics.readonly scope.
+      tags:
+        - Demographics
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-demographics.readonly
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemographicsCollectionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /demographics/{id}:
+    get:
+      operationId: getDemographics
+      summary: Get demographics for a specific user
+      description: |
+        Return demographics for a specific user. The sourcedId of the demographics 
+        is the same as the sourcedId of the user to which it refers.
+      tags:
+        - Demographics
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-demographics.readonly
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemographicsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================================================
+  # ENROLLMENTS
+  # ==========================================================================
+  /enrollments:
+    get:
+      operationId: getAllEnrollments
+      summary: Get all enrollments
+      description: Return collection of all enrollments.
+      tags:
+        - Enrollments
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /enrollments/{id}:
+    get:
+      operationId: getEnrollment
+      summary: Get a specific enrollment
+      description: Return a specific enrollment by sourcedId.
+      tags:
+        - Enrollments
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================================================
+  # ORGANIZATIONS
+  # ==========================================================================
+  /orgs:
+    get:
+      operationId: getAllOrgs
+      summary: Get all organizations
+      description: Return collection of organizations.
+      tags:
+        - Organizations
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /orgs/{id}:
+    get:
+      operationId: getOrg
+      summary: Get a specific organization
+      description: Return a specific organization by sourcedId.
+      tags:
+        - Organizations
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ==========================================================================
+  # SCHOOLS
+  # ==========================================================================
+  /schools:
+    get:
+      operationId: getAllSchools
+      summary: Get all schools
+      description: Return collection of schools. A School is an instance of an Org with type=school.
+      tags:
+        - Schools
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /schools/{id}:
+    get:
+      operationId: getSchool
+      summary: Get a specific school
+      description: Return a specific school by sourcedId. A School is an instance of an Org.
+      tags:
+        - Schools
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /schools/{school_id}/students:
+    get:
+      operationId: getStudentsForSchool
+      summary: Get students for a school
+      description: Return the collection of students attending this school.
+      tags:
+        - Schools
+        - Students
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - name: school_id
+          in: path
+          required: true
+          description: The sourcedId of the school
+          schema:
+            $ref: '#/components/schemas/GUID'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /schools/{school_id}/enrollments:
+    get:
+      operationId: getEnrollmentsForSchool
+      summary: Get enrollments for a school
+      description: Return the collection of all enrollments for this school.
+      tags:
+        - Schools
+        - Enrollments
+      security:
+        - OAuth2:
+            - https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly
+      parameters:
+        - name: school_id
+          in: path
+          required: true
+          description: The sourcedId of the school
+          schema:
+            $ref: '#/components/schemas/GUID'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/orderBy'
+        - $ref: '#/components/parameters/filter'
+        - $ref: '#/components/parameters/fields'
+      responses:
+        '200':
+          description: Successful response
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/X-Total-Count'
+            Link:
+              $ref: '#/components/headers/Link'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+# ============================================================================
+# COMPONENTS
+# ============================================================================
+components:
+  # ==========================================================================
+  # SECURITY SCHEMES
+  # ==========================================================================
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: |
+        OAuth 2.0 Client Credentials Grant flow as defined in RFC 6749.
+        Access tokens are obtained using client credentials (consumer key and secret).
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes:
+            https://purl.imsglobal.org/spec/or/v1p1/scope/roster-core.readonly: >-
+              Access to core rostering endpoints (academicSessions, classes, courses, 
+              enrollments, gradingPeriods, orgs, schools, students, teachers, terms, users)
+            https://purl.imsglobal.org/spec/or/v1p1/scope/roster.readonly: >-
+              Access to ALL rostering endpoints EXCEPT demographics
+            https://purl.imsglobal.org/spec/or/v1p1/scope/roster-demographics.readonly: >-
+              Access to demographics endpoints (getDemographics, getAllDemographics)
+
+  # ==========================================================================
+  # PARAMETERS
+  # ==========================================================================
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      description: The sourcedId of the resource
+      schema:
+        $ref: '#/components/schemas/GUID'
+
+    limit:
+      name: limit
+      in: query
+      description: The number of results to return. Default is 100.
+      schema:
+        type: integer
+        minimum: 1
+        default: 100
+
+    offset:
+      name: offset
+      in: query
+      description: The index of the first record to return (zero indexed). Default is 0.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+    sort:
+      name: sort
+      in: query
+      description: |
+        The data field to sort by. Can be any single data element in the core 
+        description of the resource.
+      schema:
+        type: string
+      example: familyName
+
+    orderBy:
+      name: orderBy
+      in: query
+      description: The sort order - ascending (asc) or descending (desc).
+      schema:
+        type: string
+        enum:
+          - asc
+          - desc
+
+    filter:
+      name: filter
+      in: query
+      description: |
+        Filter expression to limit results. Format: field=value or field~value (contains).
+        Predicates: = (equals), != (not equal), > (greater than), >= (greater or equal), 
+        < (less than), <= (less or equal), ~ (contains).
+        Logical operators: AND, OR (with spaces).
+        Values must be enclosed in single quotes and are case-insensitive.
+        Must be URL encoded.
+      schema:
+        type: string
+      example: "familyName='Smith'"
+
+    fields:
+      name: fields
+      in: query
+      description: |
+        Comma-delimited list of fields to return. If specified, only these fields 
+        are returned. If not specified, all mandatory and optional fields are returned.
+      schema:
+        type: string
+      example: "sourcedId,givenName,familyName,email"
+
+  # ==========================================================================
+  # HEADERS
+  # ==========================================================================
+  headers:
+    X-Total-Count:
+      description: The total number of resources in the collection
+      schema:
+        type: integer
+
+    Link:
+      description: |
+        Pagination links (next, previous, first, last) as per RFC 5988.
+        Example: <https://example.com/students?limit=10&offset=20>; rel="next"
+      schema:
+        type: string
+
+  # ==========================================================================
+  # RESPONSES
+  # ==========================================================================
+  responses:
+    BadRequest:
+      description: Bad Request - The request was invalid and cannot be served
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusInfoSet'
+
+    Unauthorized:
+      description: Unauthorized - The request requires authorization
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusInfoSet'
+
+    Forbidden:
+      description: Forbidden - The server can be reached but refuses to take action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusInfoSet'
+
+    NotFound:
+      description: Not Found - There is no resource behind the URI
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusInfoSet'
+
+    TooManyRequests:
+      description: Too Many Requests - The server is receiving too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusInfoSet'
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatusInfoSet'
+
+  # ==========================================================================
+  # SCHEMAS
+  # ==========================================================================
+  schemas:
+    # ------------------------------------------------------------------------
+    # Base Types
+    # ------------------------------------------------------------------------
+    GUID:
+      type: string
+      description: |
+        A globally unique identifier. May or may not be a UUID. 
+        Should be treated as case-sensitive.
+      example: "9877728989-ABF-0001"
+
+    DateOnly:
+      type: string
+      format: date
+      description: Date in ISO 8601 format (YYYY-MM-DD)
+      example: "2024-01-15"
+
+    DateTime:
+      type: string
+      format: date-time
+      description: |
+        DateTime in W3C profile of ISO 8601 with millisecond precision and UTC timezone.
+        Format: YYYY-MM-DDTHH:MM:SS.mmmZ
+      example: "2024-01-15T18:25:43.511Z"
+
+    GUIDRef:
+      type: object
+      description: A reference to another resource by its GUID
+      required:
+        - href
+        - sourcedId
+        - type
+      properties:
+        href:
+          type: string
+          format: uri
+          description: The URI for the referenced resource
+          example: "https://example.com/ims/oneroster/v1p1/users/abc123"
+        sourcedId:
+          $ref: '#/components/schemas/GUID'
+        type:
+          type: string
+          description: The type of the referenced resource
+          enum:
+            - academicSession
+            - category
+            - class
+            - course
+            - demographics
+            - enrollment
+            - gradingPeriod
+            - lineItem
+            - org
+            - resource
+            - result
+            - school
+            - student
+            - teacher
+            - term
+            - user
+
+    # ------------------------------------------------------------------------
+    # Enumerations
+    # ------------------------------------------------------------------------
+    StatusType:
+      type: string
+      description: The status of the record
+      enum:
+        - active
