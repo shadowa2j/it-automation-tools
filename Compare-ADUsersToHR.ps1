@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Compares Active Directory enabled users export against HR roster to identify discrepancies.
+    Compares Active Directory enabled users export against HR roster to identify discrepancies using email addresses.
 
 .DESCRIPTION
-    This script compares two user lists (AD export and HR roster) and generates a detailed report
-    showing which users exist in one system but not the other. Only includes enabled AD users.
+    This script compares two user lists (AD export and HR roster) using email addresses as the primary matching field.
+    Generates a detailed report showing which users exist in one system but not the other. Only includes enabled AD users.
     Outputs results in both CSV and HTML formats with edge case reporting.
 
 .PARAMETER ADExportPath
@@ -25,7 +25,7 @@
 .NOTES
     Author: Bryan
     Requires: ImportExcel PowerShell Module (Install-Module ImportExcel)
-    Version: 1.0
+    Version: 2.0 - Now matches on email address instead of names
 #>
 
 [CmdletBinding()]
@@ -93,99 +93,86 @@ Write-Host "`nProcessing and normalizing data..." -ForegroundColor Cyan
 $adUsersEnabled = $adUsers | Where-Object { $_.Status -eq "Enabled" }
 Write-Host "Filtered to $($adUsersEnabled.Count) enabled AD users" -ForegroundColor Yellow
 
-# Process AD users - normalize names and track edge cases
+# Process AD users - normalize emails and track edge cases
 $adProcessed = @()
 $adEdgeCases = @()
 
 foreach ($user in $adUsersEnabled) {
-    # Check for missing data
-    if ([string]::IsNullOrWhiteSpace($user.FirstName) -or [string]::IsNullOrWhiteSpace($user.LastName)) {
+    # Check for missing email
+    if ([string]::IsNullOrWhiteSpace($user.Email)) {
         $adEdgeCases += [PSCustomObject]@{
             Source = "Active Directory"
-            Issue = "Missing Name Data"
+            Issue = "Missing Email Address"
             Username = $user.Username
             FirstName = $user.FirstName
             LastName = $user.LastName
-            FullName = "$($user.FirstName) $($user.LastName)".Trim()
+            Email = ""
         }
         continue
     }
     
-    $normalizedFirst = $user.FirstName.Trim().ToLower()
-    $normalizedLast = $user.LastName.Trim().ToLower()
-    $fullName = "$normalizedFirst $normalizedLast"
+    $normalizedEmail = $user.Email.Trim().ToLower()
     
     $adProcessed += [PSCustomObject]@{
         Username = $user.Username
         FirstName = $user.FirstName
         LastName = $user.LastName
-        NormalizedFirst = $normalizedFirst
-        NormalizedLast = $normalizedLast
-        FullName = $fullName
+        Email = $user.Email
+        NormalizedEmail = $normalizedEmail
     }
 }
 
-# Process HR users - extract last name and normalize
+# Process HR users - normalize emails
 $hrProcessed = @()
 $hrEdgeCases = @()
 
 foreach ($user in $hrUsers) {
+    $email = $user.'Email - Primary Work'
     $legalName = $user.'Legal Name'
     $firstName = $user.'Legal Name - First Name'
     
-    # Check for missing data
-    if ([string]::IsNullOrWhiteSpace($legalName) -or [string]::IsNullOrWhiteSpace($firstName)) {
+    # Check for missing email
+    if ([string]::IsNullOrWhiteSpace($email)) {
         $hrEdgeCases += [PSCustomObject]@{
             Source = "HR Roster"
-            Issue = "Missing Name Data"
-            Username = $user.'Email - Primary Work'
+            Issue = "Missing Email Address"
+            Username = ""
             FirstName = $firstName
-            LastName = ""
-            FullName = $legalName
+            LastName = if ($legalName) { $legalName.Replace($firstName, "").Trim() } else { "" }
+            Email = ""
         }
         continue
     }
     
-    # Extract last name (everything after first name in Legal Name)
-    $lastName = $legalName.Replace($firstName, "").Trim()
+    $normalizedEmail = $email.Trim().ToLower()
     
-    if ([string]::IsNullOrWhiteSpace($lastName)) {
-        $hrEdgeCases += [PSCustomObject]@{
-            Source = "HR Roster"
-            Issue = "Cannot Extract Last Name"
-            Username = $user.'Email - Primary Work'
-            FirstName = $firstName
-            LastName = ""
-            FullName = $legalName
-        }
-        continue
+    # Extract last name
+    $lastName = ""
+    if (-not [string]::IsNullOrWhiteSpace($legalName) -and -not [string]::IsNullOrWhiteSpace($firstName)) {
+        $lastName = $legalName.Replace($firstName, "").Trim()
     }
-    
-    $normalizedFirst = $firstName.Trim().ToLower()
-    $normalizedLast = $lastName.Trim().ToLower()
-    $fullName = "$normalizedFirst $normalizedLast"
     
     $hrProcessed += [PSCustomObject]@{
-        Email = $user.'Email - Primary Work'
+        Email = $email
+        NormalizedEmail = $normalizedEmail
         FirstName = $firstName
         LastName = $lastName
-        NormalizedFirst = $normalizedFirst
-        NormalizedLast = $normalizedLast
-        FullName = $fullName
+        LegalName = $legalName
         Manager = $user.Manager
         BusinessTitle = $user.'Business Title'
+        HireDate = $user.'Hire Date'
         Location = "$($user.'Location Address - City'), $($user.'Location Address - State (United States)')"
     }
 }
 
 Write-Host "Processed $($adProcessed.Count) valid AD users" -ForegroundColor Yellow
 Write-Host "Processed $($hrProcessed.Count) valid HR users" -ForegroundColor Yellow
-Write-Host "Found $($adEdgeCases.Count) AD edge cases" -ForegroundColor Yellow
-Write-Host "Found $($hrEdgeCases.Count) HR edge cases" -ForegroundColor Yellow
+Write-Host "Found $($adEdgeCases.Count) AD edge cases (missing email)" -ForegroundColor Yellow
+Write-Host "Found $($hrEdgeCases.Count) HR edge cases (missing email)" -ForegroundColor Yellow
 #endregion
 
 #region Comparison Logic
-Write-Host "`nPerforming comparison..." -ForegroundColor Cyan
+Write-Host "`nPerforming comparison based on email addresses..." -ForegroundColor Cyan
 
 # Create hash tables for quick lookup
 $adHash = @{}
@@ -196,44 +183,43 @@ $adDuplicates = @()
 $hrDuplicates = @()
 
 foreach ($user in $adProcessed) {
-    if ($adHash.ContainsKey($user.FullName)) {
+    if ($adHash.ContainsKey($user.NormalizedEmail)) {
         $adDuplicates += [PSCustomObject]@{
             Source = "Active Directory"
-            Issue = "Duplicate Name"
-            FirstName = $user.FirstName
-            LastName = $user.LastName
-            FullName = "$($user.FirstName) $($user.LastName)"
-            Username1 = $adHash[$user.FullName].Username
+            Issue = "Duplicate Email"
+            Email = $user.Email
+            Username1 = $adHash[$user.NormalizedEmail].Username
             Username2 = $user.Username
+            Name1 = "$($adHash[$user.NormalizedEmail].FirstName) $($adHash[$user.NormalizedEmail].LastName)"
+            Name2 = "$($user.FirstName) $($user.LastName)"
         }
     }
     else {
-        $adHash[$user.FullName] = $user
+        $adHash[$user.NormalizedEmail] = $user
     }
 }
 
 foreach ($user in $hrProcessed) {
-    if ($hrHash.ContainsKey($user.FullName)) {
+    if ($hrHash.ContainsKey($user.NormalizedEmail)) {
         $hrDuplicates += [PSCustomObject]@{
             Source = "HR Roster"
-            Issue = "Duplicate Name"
-            FirstName = $user.FirstName
-            LastName = $user.LastName
-            FullName = "$($user.FirstName) $($user.LastName)"
-            Email1 = $hrHash[$user.FullName].Email
-            Email2 = $user.Email
+            Issue = "Duplicate Email"
+            Email = $user.Email
+            Name1 = $hrHash[$user.NormalizedEmail].LegalName
+            Name2 = $user.LegalName
         }
     }
     else {
-        $hrHash[$user.FullName] = $user
+        $hrHash[$user.NormalizedEmail] = $user
     }
 }
 
 # Find users in AD but not in HR
 $inADNotHR = @()
 foreach ($adUser in $adProcessed) {
-    if (-not $hrHash.ContainsKey($adUser.FullName)) {
+    if (-not $hrHash.ContainsKey($adUser.NormalizedEmail)) {
         $inADNotHR += [PSCustomObject]@{
+            Email = $adUser.Email
             FirstName = $adUser.FirstName
             LastName = $adUser.LastName
             Username = $adUser.Username
@@ -245,13 +231,15 @@ foreach ($adUser in $adProcessed) {
 # Find users in HR but not in AD
 $inHRNotAD = @()
 foreach ($hrUser in $hrProcessed) {
-    if (-not $adHash.ContainsKey($hrUser.FullName)) {
+    if (-not $adHash.ContainsKey($hrUser.NormalizedEmail)) {
         $inHRNotAD += [PSCustomObject]@{
+            Email = $hrUser.Email
             FirstName = $hrUser.FirstName
             LastName = $hrUser.LastName
-            Email = $hrUser.Email
+            LegalName = $hrUser.LegalName
             BusinessTitle = $hrUser.BusinessTitle
             Manager = $hrUser.Manager
+            HireDate = $hrUser.HireDate
             Location = $hrUser.Location
             MissingFrom = "Active Directory"
         }
@@ -260,8 +248,8 @@ foreach ($hrUser in $hrProcessed) {
 
 Write-Host "Found $($inADNotHR.Count) users in AD but not in HR" -ForegroundColor Yellow
 Write-Host "Found $($inHRNotAD.Count) users in HR but not in AD" -ForegroundColor Yellow
-Write-Host "Found $($adDuplicates.Count) duplicate names in AD" -ForegroundColor Yellow
-Write-Host "Found $($hrDuplicates.Count) duplicate names in HR" -ForegroundColor Yellow
+Write-Host "Found $($adDuplicates.Count) duplicate emails in AD" -ForegroundColor Yellow
+Write-Host "Found $($hrDuplicates.Count) duplicate emails in HR" -ForegroundColor Yellow
 #endregion
 
 #region Report Generation
@@ -278,12 +266,13 @@ $reportData = @()
 foreach ($user in $inADNotHR) {
     $reportData += [PSCustomObject]@{
         Category = "In AD, Not in HR"
+        Email = $user.Email
         FirstName = $user.FirstName
         LastName = $user.LastName
         Username = $user.Username
-        Email = ""
         BusinessTitle = ""
         Manager = ""
+        HireDate = ""
         Location = ""
         Notes = ""
     }
@@ -293,12 +282,13 @@ foreach ($user in $inADNotHR) {
 foreach ($user in $inHRNotAD) {
     $reportData += [PSCustomObject]@{
         Category = "In HR, Not in AD"
+        Email = $user.Email
         FirstName = $user.FirstName
         LastName = $user.LastName
         Username = ""
-        Email = $user.Email
         BusinessTitle = $user.BusinessTitle
         Manager = $user.Manager
+        HireDate = $user.HireDate
         Location = $user.Location
         Notes = ""
     }
@@ -308,12 +298,13 @@ foreach ($user in $inHRNotAD) {
 foreach ($edge in ($adEdgeCases + $hrEdgeCases)) {
     $reportData += [PSCustomObject]@{
         Category = "Edge Case"
+        Email = $edge.Email
         FirstName = $edge.FirstName
         LastName = $edge.LastName
         Username = $edge.Username
-        Email = ""
         BusinessTitle = ""
         Manager = ""
+        HireDate = ""
         Location = ""
         Notes = "$($edge.Source): $($edge.Issue)"
     }
@@ -322,29 +313,31 @@ foreach ($edge in ($adEdgeCases + $hrEdgeCases)) {
 # Add duplicates
 foreach ($dup in $adDuplicates) {
     $reportData += [PSCustomObject]@{
-        Category = "Duplicate Name"
-        FirstName = $dup.FirstName
-        LastName = $dup.LastName
+        Category = "Duplicate Email"
+        Email = $dup.Email
+        FirstName = ""
+        LastName = ""
         Username = "$($dup.Username1), $($dup.Username2)"
-        Email = ""
         BusinessTitle = ""
         Manager = ""
+        HireDate = ""
         Location = ""
-        Notes = "AD: Multiple users with same name"
+        Notes = "AD: $($dup.Name1) and $($dup.Name2) share same email"
     }
 }
 
 foreach ($dup in $hrDuplicates) {
     $reportData += [PSCustomObject]@{
-        Category = "Duplicate Name"
-        FirstName = $dup.FirstName
-        LastName = $dup.LastName
+        Category = "Duplicate Email"
+        Email = $dup.Email
+        FirstName = ""
+        LastName = ""
         Username = ""
-        Email = "$($dup.Email1), $($dup.Email2)"
         BusinessTitle = ""
         Manager = ""
+        HireDate = ""
         Location = ""
-        Notes = "HR: Multiple users with same name"
+        Notes = "HR: $($dup.Name1) and $($dup.Name2) share same email"
     }
 }
 
@@ -357,7 +350,7 @@ $htmlContent = @"
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AD vs HR User Comparison Report</title>
+    <title>AD vs HR User Comparison Report (Email-Based)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -393,6 +386,7 @@ $htmlContent = @"
         .summary-box h3 {
             margin: 0 0 10px 0;
             color: #2c3e50;
+            font-size: 14px;
         }
         .summary-box .number {
             font-size: 32px;
@@ -415,10 +409,12 @@ $htmlContent = @"
             padding: 12px;
             text-align: left;
             font-weight: 600;
+            font-size: 13px;
         }
         td {
             padding: 10px;
             border-bottom: 1px solid #ddd;
+            font-size: 13px;
         }
         tr:hover {
             background-color: #f5f5f5;
@@ -443,6 +439,14 @@ $htmlContent = @"
             margin-top: 20px;
             margin-bottom: 10px;
         }
+        .matching-method {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            color: #155724;
+        }
     </style>
 </head>
 <body>
@@ -451,6 +455,10 @@ $htmlContent = @"
         <p>Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</p>
         <p>AD Export: $ADExportPath</p>
         <p>HR Roster: $HRRosterPath</p>
+    </div>
+    
+    <div class="matching-method">
+        <strong>Matching Method:</strong> Users are matched by email address (case-insensitive)
     </div>
     
     <div class="summary">
@@ -477,11 +485,11 @@ $htmlContent = @"
                 <div class="number">$($inHRNotAD.Count)</div>
             </div>
             <div class="summary-box">
-                <h3>Edge Cases</h3>
+                <h3>Missing Email</h3>
                 <div class="number">$($adEdgeCases.Count + $hrEdgeCases.Count)</div>
             </div>
             <div class="summary-box">
-                <h3>Duplicates</h3>
+                <h3>Duplicate Emails</h3>
                 <div class="number">$($adDuplicates.Count + $hrDuplicates.Count)</div>
             </div>
         </div>
@@ -497,6 +505,7 @@ if ($inADNotHR.Count -gt 0) {
     <table>
         <thead>
             <tr>
+                <th>Email</th>
                 <th>First Name</th>
                 <th>Last Name</th>
                 <th>Username</th>
@@ -504,9 +513,10 @@ if ($inADNotHR.Count -gt 0) {
         </thead>
         <tbody>
 "@
-    foreach ($user in ($inADNotHR | Sort-Object LastName, FirstName)) {
+    foreach ($user in ($inADNotHR | Sort-Object Email)) {
         $htmlContent += @"
             <tr class="category-ad-not-hr">
+                <td>$($user.Email)</td>
                 <td>$($user.FirstName)</td>
                 <td>$($user.LastName)</td>
                 <td>$($user.Username)</td>
@@ -528,24 +538,25 @@ if ($inHRNotAD.Count -gt 0) {
     <table>
         <thead>
             <tr>
-                <th>First Name</th>
-                <th>Last Name</th>
                 <th>Email</th>
+                <th>Legal Name</th>
                 <th>Business Title</th>
                 <th>Manager</th>
+                <th>Hire Date</th>
                 <th>Location</th>
             </tr>
         </thead>
         <tbody>
 "@
-    foreach ($user in ($inHRNotAD | Sort-Object LastName, FirstName)) {
+    foreach ($user in ($inHRNotAD | Sort-Object Email)) {
+        $hireDate = if ($user.HireDate) { $user.HireDate.ToString('yyyy-MM-dd') } else { "" }
         $htmlContent += @"
             <tr class="category-hr-not-ad">
-                <td>$($user.FirstName)</td>
-                <td>$($user.LastName)</td>
                 <td>$($user.Email)</td>
+                <td>$($user.LegalName)</td>
                 <td>$($user.BusinessTitle)</td>
                 <td>$($user.Manager)</td>
+                <td>$hireDate</td>
                 <td>$($user.Location)</td>
             </tr>
 "@
@@ -560,7 +571,7 @@ if ($inHRNotAD.Count -gt 0) {
 if (($adEdgeCases.Count + $hrEdgeCases.Count) -gt 0) {
     $htmlContent += @"
     <div class="section-title">
-        <h2>Edge Cases - Data Quality Issues ($($adEdgeCases.Count + $hrEdgeCases.Count))</h2>
+        <h2>Edge Cases - Missing Email Addresses ($($adEdgeCases.Count + $hrEdgeCases.Count))</h2>
     </div>
     <table>
         <thead>
@@ -569,8 +580,7 @@ if (($adEdgeCases.Count + $hrEdgeCases.Count) -gt 0) {
                 <th>Issue</th>
                 <th>First Name</th>
                 <th>Last Name</th>
-                <th>Username/Email</th>
-                <th>Full Name</th>
+                <th>Username</th>
             </tr>
         </thead>
         <tbody>
@@ -583,7 +593,6 @@ if (($adEdgeCases.Count + $hrEdgeCases.Count) -gt 0) {
                 <td>$($edge.FirstName)</td>
                 <td>$($edge.LastName)</td>
                 <td>$($edge.Username)</td>
-                <td>$($edge.FullName)</td>
             </tr>
 "@
     }
@@ -597,14 +606,13 @@ if (($adEdgeCases.Count + $hrEdgeCases.Count) -gt 0) {
 if (($adDuplicates.Count + $hrDuplicates.Count) -gt 0) {
     $htmlContent += @"
     <div class="section-title">
-        <h2>Duplicate Names ($($adDuplicates.Count + $hrDuplicates.Count))</h2>
+        <h2>Duplicate Email Addresses ($($adDuplicates.Count + $hrDuplicates.Count))</h2>
     </div>
     <table>
         <thead>
             <tr>
                 <th>Source</th>
-                <th>First Name</th>
-                <th>Last Name</th>
+                <th>Email</th>
                 <th>Details</th>
             </tr>
         </thead>
@@ -614,9 +622,8 @@ if (($adDuplicates.Count + $hrDuplicates.Count) -gt 0) {
         $htmlContent += @"
             <tr class="category-duplicate">
                 <td>$($dup.Source)</td>
-                <td>$($dup.FirstName)</td>
-                <td>$($dup.LastName)</td>
-                <td>Usernames: $($dup.Username1), $($dup.Username2)</td>
+                <td>$($dup.Email)</td>
+                <td>Usernames: $($dup.Username1) ($($dup.Name1)), $($dup.Username2) ($($dup.Name2))</td>
             </tr>
 "@
     }
@@ -624,9 +631,8 @@ if (($adDuplicates.Count + $hrDuplicates.Count) -gt 0) {
         $htmlContent += @"
             <tr class="category-duplicate">
                 <td>$($dup.Source)</td>
-                <td>$($dup.FirstName)</td>
-                <td>$($dup.LastName)</td>
-                <td>Emails: $($dup.Email1), $($dup.Email2)</td>
+                <td>$($dup.Email)</td>
+                <td>Names: $($dup.Name1), $($dup.Name2)</td>
             </tr>
 "@
     }
@@ -650,14 +656,15 @@ Write-Host "HTML report saved to: $htmlPath" -ForegroundColor Green
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "           COMPARISON COMPLETE          " -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "`nMatching Method: Email Address (case-insensitive)" -ForegroundColor White
 Write-Host "`nSummary Statistics:" -ForegroundColor White
 Write-Host "  Total AD Users (Enabled): $($adProcessed.Count)" -ForegroundColor Yellow
 Write-Host "  Total HR Users: $($hrProcessed.Count)" -ForegroundColor Yellow
 Write-Host "  Matched Users: $($adProcessed.Count - $inADNotHR.Count)" -ForegroundColor Green
 Write-Host "  In AD but NOT in HR: $($inADNotHR.Count)" -ForegroundColor Red
 Write-Host "  In HR but NOT in AD: $($inHRNotAD.Count)" -ForegroundColor Red
-Write-Host "  Edge Cases: $($adEdgeCases.Count + $hrEdgeCases.Count)" -ForegroundColor Magenta
-Write-Host "  Duplicate Names: $($adDuplicates.Count + $hrDuplicates.Count)" -ForegroundColor Magenta
+Write-Host "  Missing Email Addresses: $($adEdgeCases.Count + $hrEdgeCases.Count)" -ForegroundColor Magenta
+Write-Host "  Duplicate Email Addresses: $($adDuplicates.Count + $hrDuplicates.Count)" -ForegroundColor Magenta
 Write-Host "`nReports generated:" -ForegroundColor White
 Write-Host "  CSV: $csvPath" -ForegroundColor Cyan
 Write-Host "  HTML: $htmlPath" -ForegroundColor Cyan

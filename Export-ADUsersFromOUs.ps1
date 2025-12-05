@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Exports Active Directory users from specified OUs with their username, name, and enabled status.
+    Exports Active Directory users from specified OUs with their username, name, email, and enabled status.
 
 .DESCRIPTION
-    This script exports AD user information (Username, First Name, Last Name, Enabled/Disabled status)
+    This script exports AD user information (Username, First Name, Last Name, Email, Enabled/Disabled status)
     from one or more Organizational Units. Searches recursively through sub-OUs and combines all results
     into a single CSV file.
 
@@ -23,7 +23,7 @@
 .NOTES
     Author: Bryan
     Requires: ActiveDirectory PowerShell Module
-    Version: 1.0
+    Version: 2.0
 #>
 
 [CmdletBinding()]
@@ -57,8 +57,8 @@ foreach ($ouPath in $OUPaths) {
         # Verify OU exists
         $null = Get-ADOrganizationalUnit -Identity $ouPath -ErrorAction Stop
         
-        # Get all users from OU recursively
-        $users = Get-ADUser -Filter * -SearchBase $ouPath -SearchScope Subtree -Properties GivenName, Surname, Enabled, SamAccountName -ErrorAction Stop
+        # Get all users from OU recursively - now including EmailAddress
+        $users = Get-ADUser -Filter * -SearchBase $ouPath -SearchScope Subtree -Properties GivenName, Surname, EmailAddress, Enabled, SamAccountName -ErrorAction Stop
         
         Write-Host "Found $($users.Count) user(s) in this OU" -ForegroundColor Yellow
         
@@ -68,6 +68,7 @@ foreach ($ouPath in $OUPaths) {
                 Username    = $user.SamAccountName
                 FirstName   = $user.GivenName
                 LastName    = $user.Surname
+                Email       = $user.EmailAddress
                 Status      = if ($user.Enabled) { "Enabled" } else { "Disabled" }
             }
             
@@ -93,10 +94,14 @@ if ($allUsers.Count -gt 0) {
         # Display summary
         $enabledCount = ($allUsers | Where-Object { $_.Status -eq "Enabled" }).Count
         $disabledCount = ($allUsers | Where-Object { $_.Status -eq "Disabled" }).Count
+        $withEmail = ($allUsers | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Email) }).Count
+        $withoutEmail = $allUsers.Count - $withEmail
         
         Write-Host "`nSummary:" -ForegroundColor Cyan
         Write-Host "  Enabled users:  $enabledCount" -ForegroundColor Green
         Write-Host "  Disabled users: $disabledCount" -ForegroundColor Red
+        Write-Host "  Users with email: $withEmail" -ForegroundColor Green
+        Write-Host "  Users without email: $withoutEmail" -ForegroundColor Yellow
     }
     catch {
         Write-Error "Failed to export CSV: $($_.Exception.Message)"
