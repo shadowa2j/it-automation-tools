@@ -245,7 +245,7 @@ function Get-CustomerHtml {
     foreach ($category in @('SentinelOne', 'NinjaRMM', 'Microsoft', 'ThirdParty')) {
         $licenses = $LicensesByCategory[$category]
         if ($licenses -and $licenses.Count -gt 0) {
-            $categoryTotal = ($licenses.Values | Measure-Object -Sum).Sum
+            $categoryTotal = ($licenses.Values | Where-Object { $_ -is [int] } | Measure-Object -Sum).Sum
             $customerTotal += $categoryTotal
             
             $rows = $licenses.GetEnumerator() | Sort-Object Name | ForEach-Object {
@@ -389,7 +389,7 @@ try {
     }
     
     # Write HTML file
-    $html -join "`n" | Out-File -FilePath $OutputPath -Encoding UTF8
+    $html -join "`n" | Out-File -FilePath $OutputPath -Encoding UTF8BOM
     
     Write-Host "`n✅ Report generated successfully!" -ForegroundColor Green
     Write-Host "   Output: $OutputPath" -ForegroundColor White

@@ -620,7 +620,7 @@ try {
     }
     
     # Write HTML
-    $html -join "`n" | Out-File -FilePath $OutputPath -Encoding UTF8
+    $html -join "`n" | Out-File -FilePath $OutputPath -Encoding UTF8BOM
     
     $changedCount = ($comparison.Values | Where-Object { $_.HasChanges }).Count
     
