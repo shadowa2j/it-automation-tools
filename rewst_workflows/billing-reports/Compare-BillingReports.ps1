@@ -372,7 +372,7 @@ function Get-ComparisonHtmlHeader {
     </style>
 </head>
 <body>
-    <h1>📊 Billing Comparison Report</h1>
+    <h1>Billing Comparison Report</h1>
     <p>Comparing <strong>$OlderDate</strong> → <strong>$NewerDate</strong> | Generated: $(Get-Date -Format 'MMMM dd, yyyy h:mm tt')</p>
 "@
 }
@@ -429,10 +429,10 @@ function Get-CustomerComparisonHtml {
     
     $categoryOrder = @('SentinelOne', 'NinjaRMM', 'Microsoft', 'ThirdParty')
     $categoryIcons = @{
-        SentinelOne = '🛡️ SentinelOne'
-        NinjaRMM = '🖥️ NinjaRMM'
-        Microsoft = '☁️ Microsoft'
-        ThirdParty = '🔧 Third Party'
+        SentinelOne = 'SentinelOne'
+        NinjaRMM = 'NinjaRMM'
+        Microsoft = 'Microsoft'
+        ThirdParty = 'Third Party'
     }
     
     $categoryHtml = @()
@@ -619,8 +619,9 @@ try {
         New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
     }
     
-    # Write HTML
-    $html -join "`n" | Out-File -FilePath $OutputPath -Encoding UTF8BOM
+    # Write HTML (UTF8 with BOM for proper emoji display)
+    $Utf8BomEncoding = New-Object System.Text.UTF8Encoding $true
+    [System.IO.File]::WriteAllText($OutputPath, ($html -join "`n"), $Utf8BomEncoding)
     
     $changedCount = ($comparison.Values | Where-Object { $_.HasChanges }).Count
     

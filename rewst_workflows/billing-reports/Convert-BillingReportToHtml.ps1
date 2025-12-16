@@ -176,7 +176,7 @@ function Get-HtmlHeader {
     </style>
 </head>
 <body>
-    <h1>📊 Monthly Billing Report</h1>
+    <h1>Monthly Billing Report</h1>
     <p>Generated: $(Get-Date -Format 'MMMM dd, yyyy h:mm tt')</p>
 "@
 }
@@ -253,10 +253,10 @@ function Get-CustomerHtml {
             }
             
             $displayName = switch ($category) {
-                'SentinelOne' { '🛡️ SentinelOne' }
-                'NinjaRMM' { '🖥️ NinjaRMM' }
-                'Microsoft' { '☁️ Microsoft' }
-                'ThirdParty' { '🔧 Third Party' }
+                'SentinelOne' { 'SentinelOne' }
+                'NinjaRMM' { 'NinjaRMM' }
+                'Microsoft' { 'Microsoft' }
+                'ThirdParty' { 'Third Party' }
             }
             
             $categoryHtml += @"
@@ -388,8 +388,9 @@ try {
         New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
     }
     
-    # Write HTML file
-    $html -join "`n" | Out-File -FilePath $OutputPath -Encoding UTF8BOM
+    # Write HTML file (UTF8 with BOM for proper emoji display)
+    $Utf8BomEncoding = New-Object System.Text.UTF8Encoding $true
+    [System.IO.File]::WriteAllText($OutputPath, ($html -join "`n"), $Utf8BomEncoding)
     
     Write-Host "`n✅ Report generated successfully!" -ForegroundColor Green
     Write-Host "   Output: $OutputPath" -ForegroundColor White
