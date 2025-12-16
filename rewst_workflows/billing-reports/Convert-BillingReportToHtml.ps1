@@ -282,7 +282,7 @@ function Get-CustomerHtml {
     <div class="customer">
         <div class="customer-header">
             <h3>$CustomerName</h3>
-            <span class="toggle">▼</span>
+            <span class="toggle">&#9660;</span>
         </div>
         <div class="customer-content">
             $($categoryHtml -join "`n")

@@ -502,7 +502,7 @@ function Get-CustomerComparisonHtml {
     <div class="customer" data-has-changes="$dataChanged">
         <div class="customer-header $hasChangesClass">
             <h3>$CustomerName $badge</h3>
-            <span class="toggle">▼</span>
+            <span class="toggle">&#9660;</span>
         </div>
         <div class="customer-content">
             $($categoryHtml -join "`n")
