@@ -1,0 +1,12 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "snipe-it-rest-api",
+    "version": "8.2.0",
+    "description": "Snipe-IT REST API for asset management"
+  },
+  "servers": [
+    {
+      "url": "https://develop.snipeitapp.com/api/v1"
+    }
+  ],
