@@ -8,8 +8,10 @@ This workflow provides a webhook endpoint that accepts device reboot requests an
 
 ## Workflow Details
 
-**Workflow Name:** Device Reboot via Webhook  
-**Trigger Type:** Webhook  
+**Workflow Name:** Device Reboot via Webhook
+
+**Trigger Type:** Webhook
+
 **Webhook URL:** `https://engine.rewst.io/webhooks/custom/trigger/019c1e7f-ac3f-75b7-9ce1-7c4975177cff/019889ac-540c-7327-9dac-2a222afec0dc`
 
 ---
@@ -25,22 +27,27 @@ This workflow provides a webhook endpoint that accepts device reboot requests an
 ## Workflow Actions
 
 ### 1. start (noop)
+
 **Purpose:** Entry point that extracts the device ID from webhook payload and initializes error tracking variables.
 
 **Publishes:**
+
 - `device_id` - The device ID from the webhook payload
 - `error_step` - Empty string (initialized for error tracking)
 - `error_message` - Empty string (initialized for error tracking)
 
 **Transitions:**
+
 - On success → `ninja_one_reboot_device`
 
 ---
 
 ### 2. ninja_one_reboot_device (NinjaRMM Action)
+
 **Purpose:** Sends reboot command to the specified device via NinjaRMM API.
 
 **Input Parameters:**
+
 - `path_params.id` - `{{ CTX.device_id }}`
 - `path_params.mode` - `NORMAL`
 - `json_body.reason` - `"Reboot initiated via webhook"`
@@ -48,6 +55,7 @@ This workflow provides a webhook endpoint that accepts device reboot requests an
 **Transition Mode:** FOLLOW_FIRST
 
 **Transitions:**
+
 - On success → `finish`
 - On failure → `error_notification`
   - Publishes `error_step`: "reboot_device"
@@ -56,11 +64,13 @@ This workflow provides a webhook endpoint that accepts device reboot requests an
 ---
 
 ### 3. error_notification (Send Email)
+
 **Purpose:** Sends error notification email when the workflow fails.
 
 **Join:** 1 (waits for any incoming path)
 
 **Email Configuration:**
+
 - **To:** qcs_rewst@qcsph.com
 - **Subject:** `[Rewst Error] Device Reboot - Device ID {{ CTX.device_id | default('Unknown') }}`
 - **Body:** HTML-formatted email containing:
@@ -69,11 +79,13 @@ This workflow provides a webhook endpoint that accepts device reboot requests an
   - Error message
   
 **Transitions:**
+
 - On success → `finish`
 
 ---
 
 ### 4. finish (noop)
+
 **Purpose:** Exit point for the workflow.
 
 **Join:** 1 (accepts paths from success or error paths)
@@ -97,18 +109,22 @@ ninja_one_reboot_device
 Three PowerShell scripts are available to trigger this workflow for specific devices:
 
 ### Reboot-HNC.ps1
+
 - **Device ID:** 3329
 - **Location:** `E:\OneDrive - Quality Computer Solutions\Documents\GitHub\it-automation-tools\rewst_workflows\`
 
 ### Reboot-ESC.ps1
+
 - **Device ID:** 3327
 - **Location:** `E:\OneDrive - Quality Computer Solutions\Documents\GitHub\it-automation-tools\rewst_workflows\`
 
 ### Reboot-WMN.ps1
+
 - **Device ID:** 3328
 - **Location:** `E:\OneDrive - Quality Computer Solutions\Documents\GitHub\it-automation-tools\rewst_workflows\`
 
 **Script Functionality:**
+
 - Sends POST request to webhook URL
 - Includes device_id in JSON payload
 - Displays success/error messages in console
@@ -151,19 +167,27 @@ The workflow implements comprehensive error handling:
 ## Troubleshooting
 
 ### Device ID Shows as Null
-**Cause:** Workflow input variable not defined  
+
+**Cause:** Workflow input variable not defined
+
 **Solution:** Ensure `device_id` is configured as a workflow input variable (type: number, required: true)
 
 ### "Expecting value: line 1 column 1" Error
-**Cause:** NinjaRMM API returning empty response (common for reboot actions)  
+
+**Cause:** NinjaRMM API returning empty response (common for reboot actions)
+
 **Solution:** This may be normal behavior - verify device actually reboots despite error message
 
 ### Webhook Returns Immediately with No Response
-**Cause:** Default webhook configuration doesn't wait for results  
+
+**Cause:** Default webhook configuration doesn't wait for results
+
 **Solution:** This is expected behavior - workflow runs asynchronously
 
 ### Script Connection Errors
-**Cause:** Network restrictions blocking access to engine.rewst.io  
+
+**Cause:** Network restrictions blocking access to engine.rewst.io
+
 **Solution:** Verify firewall rules allow HTTPS to engine.rewst.io from Terminal Services environment
 
 ---
@@ -185,7 +209,10 @@ The workflow implements comprehensive error handling:
 
 ---
 
-**Author:** Bryan Faulkner  
-**Company:** Quality Computer Solutions  
-**Created:** 2026-02-02  
+**Author:** Bryan Faulkner
+
+**Company:** Quality Computer Solutions
+
+**Created:** 2026-02-02
+
 **Last Updated:** 2026-02-02
