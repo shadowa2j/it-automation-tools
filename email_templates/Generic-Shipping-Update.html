@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipping Update</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    
+    <p style="margin: 0 0 20px 0;">Hi <strong>$firstname</strong>,</p>
+    
+    <p style="margin: 0 0 20px 0;">Here's an update on your shipment for ticket <strong>#$faultid</strong>: <em>$symptom</em></p>
+    
+    <p style="margin: 0 0 10px 0; font-size: 16px;">
+        $CFRewstTrackingMessage
+    </p>
+    
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+    
+    <div style="margin: 20px 0;">
+        $CFRewstTrackingDetails
+    </div>
+    
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+    
+    <p style="margin: 20px 0 5px 0; color: #666; font-size: 14px;">
+        If you have any questions or concerns, please reply to this email and your ticket will be updated.
+    </p>
+    
+    <p style="margin: 5px 0 0 0; color: #999; font-size: 12px;">
+        Last updated: $CFRewstTrackingLastUpdate
+    </p>
+
+</body>
+</html>

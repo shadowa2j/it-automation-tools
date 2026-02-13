@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shipment Notification</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    
+    <p style="margin: 0 0 20px 0;">Hi <strong>$firstname</strong>,</p>
+    
+    <p style="margin: 0 0 20px 0;">Your shipment for ticket <strong>#$faultid</strong>: <em>$symptom</em> has been sent.</p>
+    
+    <p style="margin: 0 0 20px 0;">$CFADDITIONALINFO</p>
+    
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+    
+    <p style="margin: 10px 0 5px 0;"><strong>Shipping Details:</strong></p>
+    
+    <p style="margin: 5px 0;">
+        <strong>Carrier:</strong> $CFUMOSRewstShippingCompany
+    </p>
+    
+    <p style="margin: 5px 0;">
+        <strong>Tracking Number(s):</strong><br>
+        <span style="font-family: monospace; font-size: 14px;">$CFRewstTrackingNumberMulti</span>
+    </p>
+    
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+    
+    <p style="margin: 20px 0 5px 0; color: #666; font-size: 14px;">
+        <strong>Please note:</strong> It may take up to 24 hours for tracking information to become active in the carrier's system.
+    </p>
+    
+    <p style="margin: 20px 0 5px 0; color: #666; font-size: 14px;">
+        If you have any questions or concerns, please reply to this email and your ticket will be updated.
+    </p>
+
+</body>
+</html>
